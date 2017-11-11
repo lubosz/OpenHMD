@@ -83,6 +83,20 @@ if(OPENHMD_DRIVER_HTC_VIVE)
 	)
 	add_definitions(-DDRIVER_HTC_VIVE)
 
+	set(VIVE_DIR ${CMAKE_CURRENT_LIST_DIR}/src/drv_htc_vive)
+
+	find_package(Eigen3 REQUIRED)
+	find_package(OpenCV REQUIRED)
+
+	include_directories(${EIGEN3_INCLUDE_DIR})
+
+	set(vive_libre_source_files
+		${VIVE_DIR}/vl_config.cpp
+		${VIVE_DIR}/vl_driver.cpp
+		${VIVE_DIR}/vl_fusion.cpp)
+
+	add_library(vive_libre ${vive_libre_source_files})
+
 	find_package(HIDAPI REQUIRED)
 	include_directories(${HIDAPI_INCLUDE_DIRS})
 	set(LIBS ${LIBS} ${HIDAPI_LIBRARIES})
