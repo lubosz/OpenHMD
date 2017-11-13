@@ -156,7 +156,18 @@ static void update_device(ohmd_device* device)
 
 				priv->last_seq = smp->seq;
 			}
-		} else if (buffer[0] == VL_MSG_HMD_LIGHT) {
+		} else {
+			LOGE("unknown message type: %u", buffer[0]);
+		}
+	}
+
+	//printf("Reading light buffer...\n");
+
+	while((size = hid_read(priv->light_sensor_handle, buffer, FEATURE_BUFFER_SIZE)) > 0){
+		if (buffer[0] == VL_MSG_HMD_LIGHT) {
+
+			//printf("Got message VL_MSG_HMD_LIGHT\n");
+
 			struct vive_headset_lighthouse_pulse_report2 pkt;
 			vl_msg_decode_hmd_light(&pkt, buffer, size);
 			//vl_msg_print_hmd_light_csv(&pkt);
@@ -168,10 +179,8 @@ static void update_device(ohmd_device* device)
 
 			if (samples_count >= 999) {
 				samples_count = 0;
-				vec3f position = get_position(priv->imu_handle, priv->light_sensor_handle, samples_collection, 'A');
-				printf("Got position! %f %f %f\n", position.x, position.y, position.z);
+				priv->base.position = get_position(priv->imu_handle, priv->light_sensor_handle, samples_collection, 'A');
 			}
-
 		} else {
 			LOGE("unknown message type: %u", buffer[0]);
 		}
@@ -192,7 +201,7 @@ static int getf(ohmd_device* device, ohmd_float_value type, float* out)
 		break;
 
 	case OHMD_POSITION_VECTOR:
-		out[0] = out[1] = out[2] = 0;
+		*(vec3f*)out = priv->base.position;
 		break;
 
 	case OHMD_DISTORTION_K:
@@ -340,6 +349,11 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 	if(!priv->light_sensor_handle)
 		goto cleanup;
 
+	if(hid_set_nonblocking(priv->light_sensor_handle, 1) == -1){
+		ohmd_set_error(driver->ctx, "failed to set non-blocking on light sensor device");
+		goto cleanup;
+	}
+
 	dump_info_string(hid_get_manufacturer_string, "manufacturer", priv->hmd_handle);
 	dump_info_string(hid_get_product_string , "product", priv->hmd_handle);
 	dump_info_string(hid_get_serial_number_string, "serial number", priv->hmd_handle);
@@ -349,8 +363,8 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 	printf("power on magic: %d\n", hret);
 
 	// enable lighthouse
-	//hret = hid_send_feature_report(priv->hmd_handle, vive_magic_enable_lighthouse, sizeof(vive_magic_enable_lighthouse));
-	//printf("enable lighthouse magic: %d\n", hret);
+	hret = hid_send_feature_report(priv->hmd_handle, vive_magic_enable_lighthouse, sizeof(vive_magic_enable_lighthouse));
+	printf("enable lighthouse magic: %d\n", hret);
 
 	unsigned char buffer[128];
 	int bytes;

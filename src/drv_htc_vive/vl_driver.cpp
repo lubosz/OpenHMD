@@ -446,7 +446,6 @@ vec3f get_position(hid_device* imu_dev, hid_device* light_dev, struct vive_heads
 	std::tie(tvec, rvec) = try_pnp(channel, &raw_light_samples, config_sensor_positions);
 
 	std::vector<float> tvec_std(tvec.rows*tvec.cols);
-
 	tvec.col(0).copyTo(tvec_std);
 
 	std::vector<float> rvec_std(rvec.rows*rvec.cols);
@@ -454,10 +453,15 @@ vec3f get_position(hid_device* imu_dev, hid_device* light_dev, struct vive_heads
 
 	raw_light_samples.clear();
 
+	printf("The position is %f %f %f\n",
+				 tvec_std[0],
+				 tvec_std[1],
+				 tvec_std[2]);
+
 	vec3f position;
-	position.x = tvec.at<float>(0);
-	position.y = tvec.at<float>(1);
-	position.z = tvec.at<float>(2);
+	position.x = tvec_std[0];
+	position.y = tvec_std[1];
+	position.z = tvec_std[2];
 
 	return position;
 
