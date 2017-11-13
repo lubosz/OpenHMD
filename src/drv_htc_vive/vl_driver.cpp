@@ -373,58 +373,98 @@ std::map<uint32_t, std::vector<uint32_t>> vl_driver::poll_angles(char channel, u
 #include <json/value.h>
 #include <json/reader.h>
 
-std::map<uint32_t, cv::Point3f> vl_driver::get_config_positions() {
-    std::string config(vl_get_config(hmd_imu_device));
+// hmd_imu_device
 
-    //printf("\n\nconfig:\n\n%s\n\n", config.c_str());
+static std::map<uint32_t, cv::Point3f> get_config_positions_dev(hid_device * dev) {
+		std::string config(vl_get_config(dev));
 
-    std::stringstream foo;
-    foo << config;
+		//printf("\n\nconfig:\n\n%s\n\n", config.c_str());
 
-    Json::Value root;
-    Json::CharReaderBuilder rbuilder;
-    // Configure the Builder, then ...
-    std::string errs;
-    bool parsingSuccessful = Json::parseFromStream(rbuilder, foo, &root, &errs);
-    if (!parsingSuccessful) {
-        // report to the user the failure and their locations in the document.
-        std::cout  << "Failed to parse configuration\n"
-                   << errs;
-        return std::map<uint32_t, cv::Point3f>();
-    }
+		std::stringstream foo;
+		foo << config;
 
-    std::string my_encoding = root.get("mb_serial_number", "UTF-32" ).asString();
-    printf("mb_serial_number: %s\n", my_encoding.c_str());
+		Json::Value root;
+		Json::CharReaderBuilder rbuilder;
+		// Configure the Builder, then ...
+		std::string errs;
+		bool parsingSuccessful = Json::parseFromStream(rbuilder, foo, &root, &errs);
+		if (!parsingSuccessful) {
+				// report to the user the failure and their locations in the document.
+				std::cout  << "Failed to parse configuration\n"
+									 << errs;
+				return std::map<uint32_t, cv::Point3f>();
+		}
 
-
-    Json::Value modelPoints = root["lighthouse_config"]["modelPoints"];
-
-    printf("model points size: %u\n", modelPoints.size());
-
-    unsigned sensor_id = 0;
+		std::string my_encoding = root.get("mb_serial_number", "UTF-32" ).asString();
+		printf("mb_serial_number: %s\n", my_encoding.c_str());
 
 
-    std::map<unsigned, cv::Point3f> config_sensor_positions;
+		Json::Value modelPoints = root["lighthouse_config"]["modelPoints"];
 
-    for ( unsigned index = 0; index < modelPoints.size(); ++index ) {
-        // Iterates over the sequence elements.
+		printf("model points size: %u\n", modelPoints.size());
 
-        Json::Value point = modelPoints[index];
+		unsigned sensor_id = 0;
 
-        //printf("%d: x %s y %s z %s\n", sensor_id, point[0].asString().c_str(), point[1].asString().c_str(), point[2].asString().c_str());
 
-        cv::Point3f p = cv::Point3f(
-                    (float) std::stod(point[0].asString()),
-                (float) std::stod(point[1].asString()),
-                (float) std::stod(point[2].asString()));
+		std::map<unsigned, cv::Point3f> config_sensor_positions;
 
-        config_sensor_positions.insert(std::pair<unsigned, cv::Point3f>(sensor_id, p));
+		for ( unsigned index = 0; index < modelPoints.size(); ++index ) {
+				// Iterates over the sequence elements.
 
-        sensor_id++;
-    }
+				Json::Value point = modelPoints[index];
 
-    return config_sensor_positions;
+				//printf("%d: x %s y %s z %s\n", sensor_id, point[0].asString().c_str(), point[1].asString().c_str(), point[2].asString().c_str());
+
+				cv::Point3f p = cv::Point3f(
+										(float) std::stod(point[0].asString()),
+								(float) std::stod(point[1].asString()),
+								(float) std::stod(point[2].asString()));
+
+				config_sensor_positions.insert(std::pair<unsigned, cv::Point3f>(sensor_id, p));
+
+				sensor_id++;
+		}
+
+		return config_sensor_positions;
 }
+
+std::map<uint32_t, cv::Point3f> vl_driver::get_config_positions() {
+		return get_config_positions_dev(hmd_imu_device);
+}
+
+vec3f get_position(hid_device* imu_dev, hid_device* light_dev, struct vive_headset_lighthouse_pulse2 *samples_collection, char channel) {
+
+	std::map<uint32_t, cv::Point3f> config_sensor_positions = get_config_positions_dev(imu_dev);
+
+	std::vector<vive_headset_lighthouse_pulse2> raw_light_samples(999);
+
+	raw_light_samples.assign(samples_collection, samples_collection + 999);
+
+	printf("polling done! will run try_pnp with %d samples\n", raw_light_samples.size());
+
+	cv::Mat rvec, tvec;
+	std::tie(tvec, rvec) = try_pnp(channel, &raw_light_samples, config_sensor_positions);
+
+	std::vector<float> tvec_std(tvec.rows*tvec.cols);
+
+	tvec.col(0).copyTo(tvec_std);
+
+	std::vector<float> rvec_std(rvec.rows*rvec.cols);
+	rvec.col(0).copyTo(rvec_std);
+
+	raw_light_samples.clear();
+
+	vec3f position;
+	position.x = tvec.at<float>(0);
+	position.y = tvec.at<float>(1);
+	position.z = tvec.at<float>(2);
+
+	return position;
+
+	//return {tvec_std, rvec_std};
+
+}
+
 
 std::pair<std::vector<float>, std::vector<float> > vl_driver::poll_pnp(char channel, uint32_t samples) {
 

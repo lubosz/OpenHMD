@@ -69,7 +69,8 @@ inline static uint32_t uread32(const unsigned char** buffer)
     return ret;
 }
 
-inline static bool vl_msg_decode_hmd_imu(vive_headset_imu_report* pkt, const unsigned char* buffer, int size)
+inline static bool vl_msg_decode_hmd_imu(struct vive_headset_imu_report* pkt,
+																				 const unsigned char* buffer, int size)
 {
     if(size != 52){
         printf("invalid vive sensor packet size (expected 52 but got %d)\n", size);
@@ -92,7 +93,7 @@ inline static bool vl_msg_decode_hmd_imu(vive_headset_imu_report* pkt, const uns
     return true;
 }
 
-inline static void vl_msg_print_hmd_imu(vive_headset_imu_report* pkt) {
+inline static void vl_msg_print_hmd_imu(struct vive_headset_imu_report* pkt) {
     printf("== imu sample ==\n");
     printf("  report_id: %u\n", pkt->report_id);
     for(int i = 0; i < 3; i++){
@@ -112,7 +113,7 @@ inline static void vl_msg_print_hmd_imu(vive_headset_imu_report* pkt) {
     }
 }
 
-inline static bool vl_msg_decode_hmd_light(vive_headset_lighthouse_pulse_report2* pkt, const unsigned char* buffer, int size)
+inline static bool vl_msg_decode_hmd_light(struct vive_headset_lighthouse_pulse_report2* pkt, const unsigned char* buffer, int size)
 {
     if(size != 64){
         printf("invalid vive sensor packet size (expected 64 but got %d)\n", size);
@@ -130,7 +131,7 @@ inline static bool vl_msg_decode_hmd_light(vive_headset_lighthouse_pulse_report2
     return true;
 }
 
-inline static void vl_msg_print_hmd_light(vive_headset_lighthouse_pulse_report2* pkt) {
+inline static void vl_msg_print_hmd_light(struct vive_headset_lighthouse_pulse_report2* pkt) {
     printf("== controller light sample ==\n");
     printf("  report_id: %u\n", pkt->report_id);
     for(int i = 0; i < 9; i++){
@@ -143,13 +144,13 @@ inline static void vl_msg_print_hmd_light(vive_headset_lighthouse_pulse_report2*
     }
 }
 
-inline static void vl_msg_print_hmd_light_csv(vive_headset_lighthouse_pulse_report2* pkt) {
+inline static void vl_msg_print_hmd_light_csv(struct vive_headset_lighthouse_pulse_report2* pkt) {
     for(int i = 0; i < 9; i++){
         printf("%u, %u, %d\n", pkt->samples[i].timestamp, pkt->samples[i].sensor_id, pkt->samples[i].length);
     }
 }
 
-inline static bool vl_msg_decode_controller_light(vive_headset_lighthouse_pulse_report1* pkt, const unsigned char* buffer, int size)
+inline static bool vl_msg_decode_controller_light(struct vive_headset_lighthouse_pulse_report1* pkt, const unsigned char* buffer, int size)
 {
     if(size != 58){
         printf("invalid vive sensor packet size (expected 58 but got %d)\n", size);
@@ -174,7 +175,7 @@ inline static bool vl_msg_decode_controller_light(vive_headset_lighthouse_pulse_
     return true;
 }
 
-inline static void vl_msg_print_controller_light(vive_headset_lighthouse_pulse_report1* pkt) {
+inline static void vl_msg_print_controller_light(struct vive_headset_lighthouse_pulse_report1* pkt) {
     printf("== hmd light sample ==\n");
     printf("  report_id: %u\n", pkt->report_id);
     printf("        num | id | type | length | time\n");
@@ -200,7 +201,7 @@ inline static void vl_msg_print_controller_light(vive_headset_lighthouse_pulse_r
     printf("padding: %u\n", pkt->padding);
 }
 
-inline static bool vl_msg_decode_watchman(vive_controller_report1* pkt, const unsigned char* buffer, int size)
+inline static bool vl_msg_decode_watchman(struct vive_controller_report1* pkt, const unsigned char* buffer, int size)
 {
     if(size != 30){
         printf("invalid vive sensor packet size (expected 30 but got %d)\n", size);
@@ -217,7 +218,7 @@ inline static bool vl_msg_decode_watchman(vive_controller_report1* pkt, const un
     return true;
 }
 
-inline static void vl_msg_print_watchman(vive_controller_report1 * pkt) {
+inline static void vl_msg_print_watchman(struct vive_controller_report1* pkt) {
     /*
     printf("vive watchman sample:\n");
     printf("  report_id: %u\n", pkt->report_id);
@@ -227,7 +228,7 @@ inline static void vl_msg_print_watchman(vive_controller_report1 * pkt) {
     printf("  type2: %d\n", pkt->type2);
     */
 
-    vive_controller_message* msg = &pkt->message;
+		struct vive_controller_message* msg = &pkt->message;
     printf("type %d %d buttons\n", msg->type1, msg->type2);
 }
 

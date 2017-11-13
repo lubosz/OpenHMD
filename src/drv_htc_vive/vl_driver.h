@@ -26,12 +26,15 @@
 
 #pragma once
 
+#ifdef __cplusplus
+
 #include <hidapi.h>
 #include <opencv2/opencv.hpp>
 
 #include "vl_magic.h"
 #include "vl_fusion.h"
 #include "vl_messages.h"
+#include "omath.h"
 
 #define FEATURE_BUFFER_SIZE 256
 
@@ -83,10 +86,12 @@ class vl_driver {
     std::pair<std::vector<float>, std::vector<float> >
     poll_pnp(char channel, uint32_t samples);
 
-    std::map<uint32_t, cv::Point3f> config_sensor_positions;
+		std::map<uint32_t, cv::Point3f> config_sensor_positions;
 };
 
 typedef std::function<void(unsigned char*,int)> query_fun;
+
+static std::map<uint32_t, cv::Point3f> get_config_positions_dev(hid_device * dev);
 
 #define FEATURE_BUFFER_SIZE 256
 static inline void hid_query(hid_device* dev, query_fun fun) {
@@ -99,3 +104,14 @@ static inline void hid_query(hid_device* dev, query_fun fun) {
     if(size < 0)
         printf("error reading from device\n");
 }
+#endif /* __cplusplus */
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+extern vec3f get_position(hid_device* imu_dev, hid_device* light_dev, struct vive_headset_lighthouse_pulse2 *samples_collection, char channel);
+
+#ifdef __cplusplus
+}
+#endif

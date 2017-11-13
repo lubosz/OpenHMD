@@ -88,18 +88,26 @@ if(OPENHMD_DRIVER_HTC_VIVE)
 	find_package(Eigen3 REQUIRED)
 	find_package(OpenCV REQUIRED)
 
-	include_directories(${EIGEN3_INCLUDE_DIR})
+	include_directories(${EIGEN3_INCLUDE_DIR} src)
 
-	set(vive_libre_source_files
+	set(vive_libre_source_files SHARED
 		${VIVE_DIR}/vl_config.cpp
 		${VIVE_DIR}/vl_driver.cpp
-		${VIVE_DIR}/vl_fusion.cpp)
+		${VIVE_DIR}/vl_fusion.cpp
+		${VIVE_DIR}/vl_light.h
+		${VIVE_DIR}/vl_math.h
+		${VIVE_DIR}/vl_config.h
+		${VIVE_DIR}/vl_driver.h
+		${VIVE_DIR}/vl_fusion.h
+		${VIVE_DIR}/vl_magic.h
+		${VIVE_DIR}/vl_messages.h)
 
 	add_library(vive_libre ${vive_libre_source_files})
+	target_link_libraries(vive_libre jsoncpp ${OpenCV_LIBRARIES})
 
 	find_package(HIDAPI REQUIRED)
 	include_directories(${HIDAPI_INCLUDE_DIRS})
-	set(LIBS ${LIBS} ${HIDAPI_LIBRARIES})
+	set(LIBS ${LIBS} ${HIDAPI_LIBRARIES} vive_libre)
 endif(OPENHMD_DRIVER_HTC_VIVE)
 
 if(OPENHMD_DRIVER_NOLO)
@@ -146,10 +154,11 @@ endif (UNIX)
 link_libraries(${LIBS})
 add_library(openhmd-shared SHARED ${openhmd_source_files})
 SET_TARGET_PROPERTIES(openhmd-shared PROPERTIES OUTPUT_NAME openhmd CLEAN_DIRECT_OUTPUT 1)
-add_library(openhmd-static STATIC ${openhmd_source_files})
-SET_TARGET_PROPERTIES(openhmd-static PROPERTIES OUTPUT_NAME openhmd CLEAN_DIRECT_OUTPUT 1)
+#add_library(openhmd-static STATIC ${openhmd_source_files})
+#SET_TARGET_PROPERTIES(openhmd-static PROPERTIES OUTPUT_NAME openhmd CLEAN_DIRECT_OUTPUT 1)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_DIR}/)
 
 #install properties
-install (TARGETS openhmd-shared openhmd-static DESTINATION lib)
+#install (TARGETS openhmd-shared openhmd-static DESTINATION lib)
+install (TARGETS openhmd-shared DESTINATION lib)
 install (FILES include/openhmd.h DESTINATION include)

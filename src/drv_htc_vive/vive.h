@@ -10,7 +10,13 @@
 typedef enum
 {
 	VIVE_CONFIG_DATA = 17,
-	VIVE_IRQ_SENSORS = 32,
+	VIVE_IRQ_SENSORS = 32, // VL_MSG_HMD_IMU
+	/*
+	VL_MSG_CONTROLLER_LIGHT = 33,
+	VL_MSG_WATCHMAN = 35,
+	VL_MSG_36 = 36,
+	VL_MSG_HMD_LIGHT = 37,
+	*/
 } vive_irq_cmd;
 
 typedef struct

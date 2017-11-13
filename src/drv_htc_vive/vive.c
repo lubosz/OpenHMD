@@ -15,7 +15,9 @@
 #define VALVE_ID                 0x28de
 #define VIVE_WATCHMAN_DONGLE     0x2101
 #define VIVE_LIGHTHOUSE_FPGA_RX  0x2000
+#define VIVE_CONTROLLER          0x2012
 
+#define FREQ_48MHZ 1.0f / 48000000.0f
 #define VIVE_TIME_DIV 48000000.0f
 
 #include <string.h>
@@ -27,12 +29,17 @@
 #include <stdbool.h>
 
 #include "vive.h"
+#include "hid-reports.h"
+#include "vl_messages.h"
+#include "vl_driver.h"
 
 typedef struct {
 	ohmd_device base;
 
 	hid_device* hmd_handle;
 	hid_device* imu_handle;
+	hid_device* watchman_dongle_hanlde;
+	hid_device* light_sensor_handle;
 	fusion sensor_fusion;
 	vec3f raw_accel, raw_gyro;
 	uint32_t last_ticks;
@@ -106,6 +113,9 @@ vive_sensor_sample* get_next_sample(vive_sensor_packet* pkt, int last_seq)
 	return NULL;
 }
 
+static struct vive_headset_lighthouse_pulse2 samples_collection[999];
+static uint32_t samples_count = 0;
+
 static void update_device(ohmd_device* device)
 {
 	vive_priv* priv = (vive_priv*)device;
@@ -146,7 +156,23 @@ static void update_device(ohmd_device* device)
 
 				priv->last_seq = smp->seq;
 			}
-		}else{
+		} else if (buffer[0] == VL_MSG_HMD_LIGHT) {
+			struct vive_headset_lighthouse_pulse_report2 pkt;
+			vl_msg_decode_hmd_light(&pkt, buffer, size);
+			//vl_msg_print_hmd_light_csv(&pkt);
+
+			for(int i = 0; i < 9; i++){
+					samples_collection[samples_count] = pkt.samples[i];
+					samples_count++;
+			}
+
+			if (samples_count >= 999) {
+				samples_count = 0;
+				vec3f position = get_position(priv->imu_handle, priv->light_sensor_handle, samples_collection, 'A');
+				printf("Got position! %f %f %f\n", position.x, position.y, position.z);
+			}
+
+		} else {
 			LOGE("unknown message type: %u", buffer[0]);
 		}
 	}
@@ -302,7 +328,6 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 
 	// Open the lighthouse device
 	priv->imu_handle = open_device_idx(VALVE_ID, VIVE_LIGHTHOUSE_FPGA_RX, 0, 2, idx);
-
 	if(!priv->imu_handle)
 		goto cleanup;
 
@@ -310,6 +335,10 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 		ohmd_set_error(driver->ctx, "failed to set non-blocking on device");
 		goto cleanup;
 	}
+
+	priv->light_sensor_handle = open_device_idx(VALVE_ID, VIVE_LIGHTHOUSE_FPGA_RX, 1, 2, idx);
+	if(!priv->light_sensor_handle)
+		goto cleanup;
 
 	dump_info_string(hid_get_manufacturer_string, "manufacturer", priv->hmd_handle);
 	dump_info_string(hid_get_product_string , "product", priv->hmd_handle);
