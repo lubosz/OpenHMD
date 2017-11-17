@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 from distutils.core import setup
 from distutils.extension import Extension
@@ -8,6 +8,7 @@ module1 = Extension("openhmd",
     ["pyopenhmd.pyx", "pyopenhmd_wrapper.cpp"],
     language="c++",
     libraries=["openhmd"],
+    library_dirs=['../'],
     include_dirs=['../include'])
  
 setup(name = 'openhmd',
