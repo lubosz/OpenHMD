@@ -18,7 +18,8 @@ cdef extern from "pyopenhmd.h":
         
 
 cdef class PyOpenHMD:
-    cdef OpenHMD* thisptr      # hold a C++ instance which we're wrapping
+    # hold a C++ instance which we're wrapping
+    cdef OpenHMD* thisptr
     def __cinit__(self):
         self.thisptr = new OpenHMD()
     def __dealloc__(self):
