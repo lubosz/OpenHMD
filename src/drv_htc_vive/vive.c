@@ -166,7 +166,7 @@ static void update_device(ohmd_device* device)
 	while((size = hid_read(priv->light_sensor_handle, buffer, FEATURE_BUFFER_SIZE)) > 0){
 		if (buffer[0] == VL_MSG_HMD_LIGHT) {
 
-			//printf("Got message VL_MSG_HMD_LIGHT\n");
+			printf("Got message VL_MSG_HMD_LIGHT\n");
 
 			struct vive_headset_lighthouse_pulse_report2 pkt;
 			vl_msg_decode_hmd_light(&pkt, buffer, size);
@@ -311,6 +311,40 @@ static hid_device* open_device_idx(int manufacturer, int product, int iface, int
 	return ret;
 }
 
+static int vive_headset_enable_lighthouse(ohmd_device* device,
+						int enable_sensors)
+{
+	unsigned char buf[5] = { 0x04 };
+	int ret;
+
+	vive_priv* priv = (vive_priv*)device;
+
+	//hret = hid_send_feature_report(priv->hmd_handle, vive_magic_enable_lighthouse, sizeof(vive_magic_enable_lighthouse));
+	//printf("enable lighthouse magic: %d\n", hret);
+
+
+	/* Enable vsync timestamps, enable/disable sensor reports */
+	buf[1] = enable_sensors ? 0x00 : 0x01;
+	ret = hid_send_feature_report(priv->hmd_handle, buf, sizeof(buf));
+	if (ret < 0)
+		return ret;
+
+	printf("\n!! first lighthouse magic ret %d!\n", ret);
+
+	/*
+	 * Reset Lighthouse Rx registers? Without this, inactive channels are
+	 * not cleared to 0xff.
+	 */
+	buf[0] = 0x07;
+	buf[1] = 0x02;
+
+	ret = hid_send_feature_report(priv->hmd_handle, buf, sizeof(buf));
+
+	printf("\n!! second lighthouse magic ret %d!\n", ret);
+	return ret;
+}
+
+
 static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 {
 	vive_priv* priv = ohmd_alloc(driver->ctx, sizeof(vive_priv));
@@ -363,7 +397,8 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 	printf("power on magic: %d\n", hret);
 
 	// enable lighthouse
-	hret = hid_send_feature_report(priv->hmd_handle, vive_magic_enable_lighthouse, sizeof(vive_magic_enable_lighthouse));
+	hret = vive_headset_enable_lighthouse((ohmd_device*)priv, 1);
+	//hret = hid_send_feature_report(priv->light_sensor_handle, vive_magic_enable_lighthouse, sizeof(vive_magic_enable_lighthouse));
 	printf("enable lighthouse magic: %d\n", hret);
 
 	unsigned char buffer[128];
