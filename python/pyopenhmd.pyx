@@ -1,6 +1,6 @@
 from libcpp.vector cimport vector
 
-cdef extern from "pyopenhmd.h":
+cdef extern from "pyopenhmd_wrapper.h":
     cdef cppclass OpenHMD:
         OpenHMD()
         

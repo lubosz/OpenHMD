@@ -1,3 +1,5 @@
+#pragma once
+
 #include <openhmd.h>
 #include <string>
 #include <vector>
