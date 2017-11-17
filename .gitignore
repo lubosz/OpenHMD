@@ -42,3 +42,8 @@ CMakeLists.txt.user
 examples/opengl/openglexample
 examples/simple/simple
 libopenhmd.so
+
+
+# Vive WIP files
+enable-lighthouse
+libvive_libre.so
