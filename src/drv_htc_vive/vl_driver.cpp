@@ -443,7 +443,7 @@ vec3f get_position(hid_device* imu_dev, hid_device* light_dev, struct vive_heads
 	printf("polling done! will run try_pnp with %d samples\n", raw_light_samples.size());
 
 	cv::Mat rvec, tvec;
-	std::tie(tvec, rvec) = try_pnp(channel, &raw_light_samples, config_sensor_positions);
+	std::tie(tvec, rvec) = perspective_n_point(channel, &raw_light_samples, config_sensor_positions);
 
 	std::vector<float> tvec_std(tvec.rows*tvec.cols);
 	tvec.col(0).copyTo(tvec_std);
@@ -494,7 +494,7 @@ std::pair<std::vector<float>, std::vector<float> > vl_driver::poll_pnp(char chan
     printf("polling done! will run try_pnp with %d samples\n", raw_light_samples->size());
 
     cv::Mat rvec, tvec;
-    std::tie(tvec, rvec) = try_pnp(channel, raw_light_samples, config_sensor_positions);
+		std::tie(tvec, rvec) = perspective_n_point(channel, raw_light_samples, config_sensor_positions);
 
     std::vector<float> tvec_std(tvec.rows*tvec.cols);
 

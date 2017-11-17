@@ -828,11 +828,9 @@ const float ticks_per_degree = 2222.22;
 
 
 std::tuple<cv::Mat, cv::Mat>
-try_pnp(char channel, vl_lighthouse_samples *raw_light_samples,
+perspective_n_point(char channel, vl_lighthouse_samples *raw_light_samples,
         const std::map<unsigned, cv::Point3f>& config_sensor_positions) {
     cv::Mat rvec, tvec;
-
-    printf("\nDoing try_pnp!!!\n");
 
     if (config_sensor_positions.size() == 0) {
         printf("Error! No sensor positions\n");
@@ -845,14 +843,8 @@ try_pnp(char channel, vl_lighthouse_samples *raw_light_samples,
     if (sensor_angles.size() == 0)
         return {tvec, rvec};
 
-    //bool useExtrinsicGuess=false;
-    //int flags=ITERATIVE;
-
-
     std::vector<cv::Point3f> object_points;
     std::vector<cv::Point2f> image_points;
-
-    //cv::Mat cameraMatrix = cv::Mat::eye(3, 3, CV_64F);
 
     int angle_range_h[2] = {32, 156};
     int angle_range_v[2] = {25, 149};
@@ -867,14 +859,6 @@ try_pnp(char channel, vl_lighthouse_samples *raw_light_samples,
                             0.0,    0.0,    1.0);
 
     cv::Mat distCoeffs = cv::Mat::zeros(1, 4, CV_64F);
-    //cv::Mat distCoeffs;
-
-    /*
-    for (int i=0; i< config_sensor_positions.size(); i++) {
-        cv::Point3f pos = config_sensor_positions.at(i);
-        printf("%d pos %f %f %f\n", i, pos.x, pos.y, pos.z);
-    }
-    */
 
     for (auto sensor_angle : sensor_angles) {
 
@@ -897,7 +881,6 @@ try_pnp(char channel, vl_lighthouse_samples *raw_light_samples,
                 configSensor.z);
         */
 
-        // for (unsigned i = 0; i < angles.second.x.size(); i++ )
         image_points.push_back(angles_cv);
         object_points.push_back(configSensor);
     }
@@ -908,11 +891,6 @@ try_pnp(char channel, vl_lighthouse_samples *raw_light_samples,
     if (object_points_cv.rows > 0 && object_points_cv.rows == image_points_cv.rows) {
         bool ret = solvePnPRansac(object_points_cv, image_points_cv, cameraMatrix,
                             distCoeffs, rvec, tvec);
-
-        if (ret)
-            std::cout << "ZE tvec = \n "  << tvec << "\n\n";
-
-        std::cout << "We had " << raw_light_samples->size() << " samples.\n";
     }
 
     return {tvec, rvec};
