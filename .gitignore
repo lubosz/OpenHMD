@@ -45,6 +45,7 @@ libopenhmd.so
 
 # python bindings
 python/pyopenhmd.cpp
+python/openhmd.cpython-*.so
 
 # Vive WIP files
 enable-lighthouse
