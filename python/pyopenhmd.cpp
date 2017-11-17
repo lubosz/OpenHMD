@@ -2,7 +2,7 @@
 #include <sys/time.h>
 #include <stdio.h>
 
-#include "OpenHMD.h"
+#include "pyopenhmd.h"
 
 OpenHMD::OpenHMD() {
   rotation = std::vector<float>(4);
