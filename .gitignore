@@ -43,6 +43,8 @@ examples/opengl/openglexample
 examples/simple/simple
 libopenhmd.so
 
+# python bindings
+python/pyopenhmd.cpp
 
 # Vive WIP files
 enable-lighthouse
