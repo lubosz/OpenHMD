@@ -162,3 +162,6 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_DIR}/)
 #install (TARGETS openhmd-shared openhmd-static DESTINATION lib)
 install (TARGETS openhmd-shared DESTINATION lib)
 install (FILES include/openhmd.h DESTINATION include)
+
+add_executable(enable-lighthouse ${CMAKE_SOURCE_DIR}/tools/enable_lighthouse.c)
+target_link_libraries(enable-lighthouse udev)
