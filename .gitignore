@@ -38,3 +38,7 @@ cmake_install.cmake
 examples/simple/CMakeFiles/
 examples/simple/Makefile
 examples/simple/cmake_install.cmake
+CMakeLists.txt.user
+examples/opengl/openglexample
+examples/simple/simple
+libopenhmd.so
