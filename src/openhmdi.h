@@ -85,6 +85,11 @@ struct ohmd_device_settings
 	bool automatic_update;
 };
 
+struct debug_blob {
+	uint32_t id;
+	vec2f position;
+};
+
 struct ohmd_device {
 	ohmd_device_properties properties;
 
@@ -98,6 +103,9 @@ struct ohmd_device {
 
 	void (*update)(ohmd_device* device);
 	void (*close)(ohmd_device* device);
+
+	vec3f (*debug_position)(ohmd_device* device);
+	void (*debug_blobs)(ohmd_device* device, debug_blob* blobs, uint32_t* size);
 
 	ohmd_context* ctx;
 
