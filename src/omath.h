@@ -36,6 +36,12 @@ float ovec3f_get_angle(const vec3f* me, const vec3f* vec);
 float ovec3f_get_dot(const vec3f* me, const vec3f* vec);
 void ovec3f_subtract(const vec3f* a, const vec3f* b, vec3f* out);
 
+typedef union {
+	struct {
+		float x, y;
+	};
+	float arr[2];
+} vec2f;
 
 // quaternion
 
