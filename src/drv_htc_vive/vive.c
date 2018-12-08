@@ -178,10 +178,8 @@ static void handle_imu_packet(vive_priv* priv, unsigned char *buffer, int size)
 	}
 }
 
-static void update_device(ohmd_device* device)
+static void read_headset_reports(vive_priv* priv)
 {
-	vive_priv* priv = (vive_priv*)device;
-
 	int size = 0;
 
 	unsigned char buffer[FEATURE_BUFFER_SIZE];
@@ -197,6 +195,34 @@ static void update_device(ohmd_device* device)
 	if(size < 0){
 		LOGE("error reading from device");
 	}
+
+}
+
+static void read_controller_reports(vive_priv* priv)
+{
+	int size = 0;
+
+	unsigned char buffer[FEATURE_BUFFER_SIZE];
+
+	while((size = hid_read(priv->watchman_handle, buffer, FEATURE_BUFFER_SIZE)) > 0) {
+		if(buffer[0] == VIVE_HMD_IMU_PACKET_ID){
+			printf("got VIVE_HMD_IMU_PACKET_ID\n");
+			//handle_imu_packet(priv, buffer, size);
+		}else{
+			LOGE("unknown message type: %u", buffer[0]);
+		}
+	}
+
+	if(size < 0){
+		LOGE("error reading from device");
+	}
+}
+
+static void update_device(ohmd_device* device)
+{
+	vive_priv* priv = (vive_priv*)device;
+	//read_headset_reports(priv);
+	read_controller_reports(priv);
 }
 
 static int getf(ohmd_device* device, ohmd_float_value type, float* out)
