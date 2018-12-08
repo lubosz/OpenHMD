@@ -42,6 +42,7 @@ typedef struct {
 
 	hid_device* hmd_handle;
 	hid_device* imu_handle;
+	hid_device* watchman_handle;
 	fusion sensor_fusion;
 	vec3f raw_accel, raw_gyro;
 	uint32_t last_ticks;
@@ -413,6 +414,43 @@ int vive_read_config(vive_priv* priv)
 	return 0;
 }
 
+int vive_read_config_controller(vive_priv* priv)
+{
+	unsigned char buffer[128];
+	int bytes;
+
+	LOGI("Getting feature report 16 to 39\n");
+	buffer[0] = VIVE_CONFIG_START_PACKET_ID;
+	bytes = hid_get_feature_report(priv->watchman_handle, buffer, sizeof(buffer));
+	printf("🥨 got %i bytes\n", bytes);
+
+	if (bytes < 0)
+		return bytes;
+
+	for (int i = 0; i < bytes; i++) {
+		printf("%02x ", buffer[i]);
+	}
+	printf("\n\n");
+
+	unsigned char* packet_buffer = malloc(4096);
+
+	int offset = 0;
+	while (buffer[1] != 0) {
+		buffer[0] = VIVE_CONFIG_READ_PACKET_ID;
+		bytes = hid_get_feature_report(priv->watchman_handle, buffer, sizeof(buffer));
+
+    memcpy((uint8_t*)packet_buffer + offset, buffer+2, buffer[1]);
+    offset += buffer[1];
+  }
+  packet_buffer[offset] = '\0';
+  LOGD("🥨 Result: %s\n", packet_buffer);
+  vive_decode_config_packet(&priv->imu_config, packet_buffer, offset);
+
+  free(packet_buffer);
+
+  return 0;
+}
+
 #define OHMD_GRAVITY_EARTH 9.80665 // m/s²
 
 int vive_get_range_packet(vive_priv* priv)
@@ -504,6 +542,31 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 		default:
 			LOGE("Unknown VIVE revision.\n");
 	}
+
+	printf("\n== Oh hai! ==\n");
+
+#if 0
+		.vid = VID_VALVE,
+		.pid = PID_VIVE_CONTROLLER,
+		.subsystem = "hidraw",
+		.name = "Vive Wireless Receiver",
+		.new = vive_controller_new,
+
+
+VIVE_WATCHMAN_DONGLE = PID_VIVE_CONTROLLER
+
+	printf("💩💩💩💩💩💩💩💩💩💩💩💩💩💩💩💩\n");
+	printf("Opening controller!\n");
+	priv->watchman_handle = open_device_idx(VALVE_ID,
+	                                        VIVE_WATCHMAN_DONGLE, 0, 1, idx);
+	printf("💩💩💩💩💩💩💩💩💩💩💩💩💩💩💩💩\n");
+	if(!priv->watchman_handle) {
+		LOGE("Could not open watchman dongle!");
+		goto cleanup;
+	}
+#endif
+
+	//vive_read_config_controller(priv);
 
 	if(!priv->hmd_handle)
 		goto cleanup;
