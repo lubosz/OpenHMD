@@ -367,7 +367,8 @@ int vive_read_firmware(hid_device* device)
 	return 0;
 }
 
-int vive_read_config(vive_priv* priv)
+int vive_read_config(hid_device* device,
+                     vive_imu_config* result)
 {
 	vive_config_start_packet start_packet = {
 		.id = VIVE_CONFIG_START_PACKET_ID,
@@ -376,7 +377,7 @@ int vive_read_config(vive_priv* priv)
 	int bytes;
 
 	LOGI("Getting vive_config_start_packet...");
-	bytes = hid_get_feature_report(priv->imu_handle,
+	bytes = hid_get_feature_report(device,
 	                               (unsigned char*) &start_packet,
 	                               sizeof(start_packet));
 
@@ -397,7 +398,7 @@ int vive_read_config(vive_priv* priv)
 
 	int offset = 0;
 	do {
-		bytes = hid_get_feature_report(priv->imu_handle,
+		bytes = hid_get_feature_report(device,
 		                               (unsigned char*) &read_packet,
 		                               sizeof(read_packet));
 
@@ -407,53 +408,17 @@ int vive_read_config(vive_priv* priv)
 		offset += read_packet.length;
 	} while (read_packet.length);
 	packet_buffer[offset] = '\0';
-	vive_decode_config_packet(&priv->imu_config, packet_buffer, offset);
+	vive_decode_config_packet(result, packet_buffer, offset);
 
 	free(packet_buffer);
 
 	return 0;
 }
 
-int vive_read_config_controller(vive_priv* priv)
-{
-	unsigned char buffer[128];
-	int bytes;
-
-	LOGI("Getting feature report 16 to 39\n");
-	buffer[0] = VIVE_CONFIG_START_PACKET_ID;
-	bytes = hid_get_feature_report(priv->watchman_handle, buffer, sizeof(buffer));
-	printf("🥨 got %i bytes\n", bytes);
-
-	if (bytes < 0)
-		return bytes;
-
-	for (int i = 0; i < bytes; i++) {
-		printf("%02x ", buffer[i]);
-	}
-	printf("\n\n");
-
-	unsigned char* packet_buffer = malloc(4096);
-
-	int offset = 0;
-	while (buffer[1] != 0) {
-		buffer[0] = VIVE_CONFIG_READ_PACKET_ID;
-		bytes = hid_get_feature_report(priv->watchman_handle, buffer, sizeof(buffer));
-
-    memcpy((uint8_t*)packet_buffer + offset, buffer+2, buffer[1]);
-    offset += buffer[1];
-  }
-  packet_buffer[offset] = '\0';
-  LOGD("🥨 Result: %s\n", packet_buffer);
-  vive_decode_config_packet(&priv->imu_config, packet_buffer, offset);
-
-  free(packet_buffer);
-
-  return 0;
-}
-
 #define OHMD_GRAVITY_EARTH 9.80665 // m/s²
 
-int vive_get_range_packet(vive_priv* priv)
+int vive_get_range_packet(hid_device* device,
+                          vive_imu_config* imu_config)
 {
 	int ret;
 
@@ -461,7 +426,7 @@ int vive_get_range_packet(vive_priv* priv)
 		.id = VIVE_IMU_RANGE_MODES_PACKET_ID
 	};
 
-	ret = hid_get_feature_report(priv->imu_handle,
+	ret = hid_get_feature_report(device,
 	                             (unsigned char*) &packet,
 	                             sizeof(packet));
 
@@ -474,7 +439,7 @@ int vive_get_range_packet(vive_priv* priv)
 	if (!packet.gyro_range || !packet.accel_range)
 	{
 		LOGW("Invalid gyroscope and accelerometer data. Trying to fetch again.");
-		ret = hid_get_feature_report(priv->imu_handle,
+		ret = hid_get_feature_report(device,
 		                             (unsigned char*) &packet,
 		                             sizeof(packet));
 		if (ret < 0)
@@ -507,11 +472,11 @@ int vive_get_range_packet(vive_priv* priv)
 	 */
 
 	double gyro_range = M_PI / 180.0 * (250 << packet.gyro_range);
-	priv->imu_config.gyro_range = (float) gyro_range;
+	imu_config->gyro_range = (float) gyro_range;
 	LOGI("Vive gyroscope range     %f", gyro_range);
 
 	double acc_range = OHMD_GRAVITY_EARTH * (2 << packet.accel_range);
-	priv->imu_config.acc_range = (float) acc_range;
+	imu_config->acc_range = (float) acc_range;
 	LOGI("Vive accelerometer range %f", acc_range);
 	return 0;
 }
@@ -543,31 +508,6 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 			LOGE("Unknown VIVE revision.\n");
 	}
 
-	printf("\n== Oh hai! ==\n");
-
-#if 0
-		.vid = VID_VALVE,
-		.pid = PID_VIVE_CONTROLLER,
-		.subsystem = "hidraw",
-		.name = "Vive Wireless Receiver",
-		.new = vive_controller_new,
-
-
-VIVE_WATCHMAN_DONGLE = PID_VIVE_CONTROLLER
-
-	printf("💩💩💩💩💩💩💩💩💩💩💩💩💩💩💩💩\n");
-	printf("Opening controller!\n");
-	priv->watchman_handle = open_device_idx(VALVE_ID,
-	                                        VIVE_WATCHMAN_DONGLE, 0, 1, idx);
-	printf("💩💩💩💩💩💩💩💩💩💩💩💩💩💩💩💩\n");
-	if(!priv->watchman_handle) {
-		LOGE("Could not open watchman dongle!");
-		goto cleanup;
-	}
-#endif
-
-	//vive_read_config_controller(priv);
-
 	if(!priv->hmd_handle)
 		goto cleanup;
 
@@ -575,6 +515,49 @@ VIVE_WATCHMAN_DONGLE = PID_VIVE_CONTROLLER
 		ohmd_set_error(driver->ctx, "failed to set non-blocking on device");
 		goto cleanup;
 	}
+
+#if 0
+		.vid = VID_VALVE,
+		.pid = PID_VIVE_CONTROLLER,
+		.subsystem = "hidraw",
+		.name = "Vive Wireless Receiver",
+		.new = vive_controller_new,
+#endif
+
+	printf("💩💩💩💩💩💩💩💩💩💩💩💩💩💩💩💩\n");
+	printf("Opening controller!\n");
+	priv->watchman_handle = open_device_idx(VALVE_ID,
+	                                        VIVE_WATCHMAN_DONGLE, 1, 2, idx);
+
+	if(!priv->watchman_handle) {
+		LOGE("Could not open watchman dongle!");
+		goto cleanup;
+	}
+
+	if(hid_set_nonblocking(priv->watchman_handle, 1) == -1){
+		LOGE("Failed to set non-blocking on device");
+		goto cleanup;
+	}
+
+	if (vive_read_firmware(priv->watchman_handle) != 0)
+	{
+		LOGE("Could not get watchman firmware version!");
+	}
+
+	//vive_read_config_controller(priv);
+
+	vive_imu_config watchman_imu_config;
+	if (vive_read_config(priv->watchman_handle, &watchman_imu_config) != 0)
+	{
+		LOGE("Could not get watchman config!");
+	}
+
+	if (vive_get_range_packet(priv->watchman_handle, &watchman_imu_config) != 0)
+	{
+		LOGW("Could not get controller imu range packet.\n");
+	}
+
+	printf("💩💩💩💩💩💩💩💩💩💩💩💩💩💩💩💩\n");
 
 	switch (desc->revision) {
 		case REV_VIVE:
