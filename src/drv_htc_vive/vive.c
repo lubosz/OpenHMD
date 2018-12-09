@@ -44,7 +44,7 @@ typedef struct {
 
 	hid_device* hmd_handle;
 	hid_device* imu_handle;
-	hid_device* watchman_handle;
+	hid_device* controller_handle[2];
 	fusion sensor_fusion;
 	vec3f raw_accel, raw_gyro;
 	uint32_t last_ticks;
@@ -59,7 +59,7 @@ typedef struct {
 	vive_revision revision;
 
 	vive_imu_config imu_config;
-	vive_imu_config controller_imu_config;
+	vive_imu_config controller_imu_config[2];
 	uint8_t buttons;
 
 } vive_priv;
@@ -315,7 +315,7 @@ static void controller_handle_analog_trigger(vive_priv* priv,
 	*/
 }
 
-static int controller_haptic_pulse(vive_priv* priv)
+static int controller_haptic_pulse(hid_device* device)
 {
 	const vive_controller_haptic_pulse_report report = {
 		.id = VIVE_CONTROLLER_COMMAND_PACKET_ID,
@@ -324,11 +324,10 @@ static int controller_haptic_pulse(vive_priv* priv)
 		.unknown = { 0x00, 0xf4, 0x01, 0xb5, 0xa2, 0x01, 0x00 },
 	};
 
-	return hid_send_feature_report(priv->watchman_handle,
-	                              &report, sizeof(report));
+	return hid_send_feature_report(device, &report, sizeof(report));
 }
 
-static int controller_poweroff(vive_priv* priv)
+static int controller_poweroff(hid_device* device)
 {
 	const vive_controller_poweroff_report report = {
 		.id = VIVE_CONTROLLER_COMMAND_PACKET_ID,
@@ -337,8 +336,7 @@ static int controller_poweroff(vive_priv* priv)
 		.magic = { 'o', 'f', 'f', '!' },
 	};
 
-	return hid_send_feature_report(priv->watchman_handle,
-	                              &report, sizeof(report));
+	return hid_send_feature_report(device, &report, sizeof(report));
 }
 
 static void controller_handle_imu_sample(vive_priv* priv, uint8_t *buf)
@@ -373,14 +371,14 @@ static void controller_handle_imu_sample(vive_priv* priv, uint8_t *buf)
 
 	priv->last_controller_ticks2 = timestamp;
 
-	float range = priv->controller_imu_config.acc_range / 32768.0f;
+  float range = priv->controller_imu_config[0].acc_range / 32768.0f;
 
 	vec3f accel_vec;
 	accel_vec.x = range * priv->imu_config.acc_scale.x * (float) accel[0] - priv->imu_config.acc_bias.x;
 	accel_vec.y = range * priv->imu_config.acc_scale.y * (float) accel[1] - priv->imu_config.acc_bias.y;
 	accel_vec.z = range * priv->imu_config.acc_scale.z * (float) accel[2] - priv->imu_config.acc_bias.z;
 
-	float gyro_range = priv->controller_imu_config.gyro_range / 32768.0f;
+  float gyro_range = priv->controller_imu_config[0].gyro_range / 32768.0f;
 	vec3f gyro_vec;
 	gyro_vec.x = gyro_range * priv->imu_config.gyro_scale.x * (float)gyro[0] - priv->imu_config.gyro_bias.x;
 	gyro_vec.y = gyro_range * priv->imu_config.gyro_scale.y * (float)gyro[1] - priv->imu_config.gyro_bias.x;
@@ -396,7 +394,8 @@ static void controller_handle_imu_sample(vive_priv* priv, uint8_t *buf)
  * Decodes multiplexed Wireless Receiver messages.
  */
 static void decode_controller_message(vive_priv* priv,
-                                      vive_controller_message *message)
+                                      vive_controller_message *message,
+                                      uint8_t id)
 {
 	unsigned char *buf = message->payload;
 	unsigned char *end = message->payload + message->len - 1;
@@ -438,7 +437,8 @@ static void decode_controller_message(vive_priv* priv,
 			}
 		}
 		if (type & 8) {
-			controller_handle_imu_sample(priv, buf);
+      if (id == 0)
+        controller_handle_imu_sample(priv, buf);
 			buf += 13;
 		}
 	}
@@ -452,19 +452,19 @@ static void decode_controller_message(vive_priv* priv,
 
 }
 
-static void read_controller_reports(vive_priv* priv)
+static void read_controller_reports(vive_priv* priv, hid_device* device, uint8_t id)
 {
 	int size = 0;
 
 	unsigned char buffer[FEATURE_BUFFER_SIZE];
 
-	while((size = hid_read(priv->watchman_handle, buffer, FEATURE_BUFFER_SIZE)) > 0) {
+	while((size = hid_read(device, buffer, FEATURE_BUFFER_SIZE)) > 0) {
 		if(buffer[0] == VIVE_HMD_IMU_PACKET_ID){
 			printf("got VIVE_HMD_IMU_PACKET_ID\n");
 			//handle_imu_packet(priv, buffer, size);
 		} else if (buffer[0] == VIVE_CONTROLLER_PACKET1_ID) {
 			vive_controller_packet1 *pkt = (vive_controller_packet1 *) buffer;
-			decode_controller_message(priv, &pkt->message);
+      decode_controller_message(priv, &pkt->message, id);
 
 		} else if (buffer[0] == VIVE_CONTROLLER_PACKET2_ID) {
 			//LOGI("Got controller packet 2.");
@@ -483,8 +483,8 @@ static void read_controller_reports(vive_priv* priv)
 static void update_device(ohmd_device* device)
 {
 	vive_priv* priv = (vive_priv*)device;
-	//read_headset_reports(priv);
-	read_controller_reports(priv);
+  read_controller_reports(priv, priv->controller_handle[0], 0);
+  read_controller_reports(priv, priv->controller_handle[1], 1);
 }
 
 static int getf(ohmd_device* device, ohmd_float_value type, float* out)
@@ -544,9 +544,11 @@ static void close_device(ohmd_device* device)
 			LOGE("Unknown VIVE revision.\n");
 	}
 
-	controller_poweroff(priv);
+  controller_poweroff(priv->controller_handle[0]);
+  controller_poweroff(priv->controller_handle[1]);
 
-	hid_close(priv->watchman_handle);
+	hid_close(priv->controller_handle[0]);
+	hid_close(priv->controller_handle[1]);
 
 	hid_close(priv->hmd_handle);
 	hid_close(priv->imu_handle);
@@ -772,6 +774,41 @@ int vive_get_range_packet(hid_device* device,
 	return 0;
 }
 
+static int open_controller(vive_priv* priv, int idx, uint32_t i)
+{
+	printf("Opening controller!\n");
+	priv->controller_handle[i] = open_device_idx(VALVE_ID,
+	                                             VIVE_WATCHMAN_DONGLE, i, 2, idx);
+
+	if(!priv->controller_handle[i]) {
+    LOGE("Could not open watchman dongle %d!", i);
+    return -1;
+	}
+
+  if(hid_set_nonblocking(priv->controller_handle[i], 1) == -1){
+		LOGE("Failed to set non-blocking on device");
+    return -1;
+	}
+
+	if (vive_read_firmware(priv->controller_handle[i]) != 0)
+	{
+		LOGE("Could not get watchman firmware version!");
+	}
+
+	//vive_read_config_controller(priv);
+
+  if (vive_read_config(priv->controller_handle[i], &priv->controller_imu_config[i]) != 0)
+	{
+		LOGE("Could not get watchman config!");
+	}
+
+  if (vive_get_range_packet(priv->controller_handle[i], &priv->controller_imu_config[i]) != 0)
+	{
+		LOGW("Could not get controller imu range packet.\n");
+	}
+  return 0;
+}
+
 static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 {
 	vive_priv* priv = ohmd_alloc(driver->ctx, sizeof(vive_priv));
@@ -807,47 +844,11 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 		goto cleanup;
 	}
 
-#if 0
-		.vid = VID_VALVE,
-		.pid = PID_VIVE_CONTROLLER,
-		.subsystem = "hidraw",
-		.name = "Vive Wireless Receiver",
-		.new = vive_controller_new,
-#endif
+  if (open_controller(priv, idx, 0) < 0)
+    goto cleanup;
 
-	printf("💩💩💩💩💩💩💩💩💩💩💩💩💩💩💩💩\n");
-	printf("Opening controller!\n");
-	priv->watchman_handle = open_device_idx(VALVE_ID,
-	                                        VIVE_WATCHMAN_DONGLE, 1, 2, idx);
-
-	if(!priv->watchman_handle) {
-		LOGE("Could not open watchman dongle!");
-		goto cleanup;
-	}
-
-	if(hid_set_nonblocking(priv->watchman_handle, 1) == -1){
-		LOGE("Failed to set non-blocking on device");
-		goto cleanup;
-	}
-
-	if (vive_read_firmware(priv->watchman_handle) != 0)
-	{
-		LOGE("Could not get watchman firmware version!");
-	}
-
-	//vive_read_config_controller(priv);
-
-	if (vive_read_config(priv->watchman_handle, &priv->controller_imu_config) != 0)
-	{
-		LOGE("Could not get watchman config!");
-	}
-
-	if (vive_get_range_packet(priv->watchman_handle, &priv->controller_imu_config) != 0)
-	{
-		LOGW("Could not get controller imu range packet.\n");
-	}
-
-	printf("💩💩💩💩💩💩💩💩💩💩💩💩💩💩💩💩\n");
+  if (open_controller(priv, idx, 1) < 0)
+    goto cleanup;
 
 	switch (desc->revision) {
 		case REV_VIVE:
