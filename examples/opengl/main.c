@@ -16,24 +16,6 @@
 
 #define OVERSAMPLE_SCALE 2.0
 
-char* read_file(const char* filename)
-{
-	FILE* f = fopen(filename, "rb");
-	fseek(f, 0, SEEK_END);
-	long len = ftell(f);
-	fseek(f, 0, SEEK_SET);
-
-	char* buffer = calloc(1, len + 1);
-	assert(buffer);
-
-	size_t ret = fread(buffer, len, 1, f);
-	assert(ret);
-
-	fclose(f);
-
-	return buffer;
-}
-
 float randf()
 {
 	return (float)rand() / (float)RAND_MAX;
