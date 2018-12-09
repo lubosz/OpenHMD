@@ -623,8 +623,7 @@ int vive_read_config(hid_device* device,
 
 	if (bytes < 0)
 	{
-		LOGE("Could not get vive_config_start_packet: %ls (%d)",
-		     hid_error(priv->imu_handle), bytes);
+		LOGE("Could not get vive_config_start_packet: %d", bytes);
 		return bytes;
 	}
 
