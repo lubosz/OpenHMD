@@ -60,6 +60,7 @@ typedef struct {
 
 	vive_imu_config imu_config;
 	vive_imu_config controller_imu_config;
+	uint8_t buttons;
 
 } vive_priv;
 
@@ -216,26 +217,76 @@ static void controller_handle_battery(vive_priv* priv, uint8_t battery)
 	(void)charging;
 }
 
-/*
-static const struct button_map controller_button_map[6] = {
-	{ VIVE_CONTROLLER_BUTTON_MENU, OUVRT_BUTTON_MENU },
-	{ VIVE_CONTROLLER_BUTTON_GRIP, OUVRT_BUTTON_GRIP },
-	{ VIVE_CONTROLLER_BUTTON_SYSTEM, OUVRT_BUTTON_SYSTEM },
-	{ VIVE_CONTROLLER_BUTTON_THUMB, OUVRT_BUTTON_THUMB },
-	{ VIVE_CONTROLLER_BUTTON_TOUCH, OUVRT_TOUCH_THUMB },
-	{ VIVE_CONTROLLER_BUTTON_TRIGGER, OUVRT_BUTTON_TRIGGER },
+typedef struct  {
+	uint32_t bit;
+	uint8_t code;
+} button_map;
+
+
+static const button_map controller_button_map[6] = {
+	{ VIVE_CONTROLLER_BUTTON_MENU, OHMD_MENU },
+	{ VIVE_CONTROLLER_BUTTON_GRIP, OHMD_SQUEEZE },
+	{ VIVE_CONTROLLER_BUTTON_SYSTEM, OHMD_HOME },
+	{ VIVE_CONTROLLER_BUTTON_THUMB, OHMD_ANALOG_PRESS },
+	{ VIVE_CONTROLLER_BUTTON_TOUCH, OHMD_TOUCHPAD_TOUCH },
+	{ VIVE_CONTROLLER_BUTTON_TRIGGER, OHMD_TRIGGER_CLICK },
 };
-*/
+
+const char* vive_button_to_string(int button)
+{
+	switch (button)
+	{
+	case VIVE_CONTROLLER_BUTTON_MENU:
+		return "VIVE_CONTROLLER_BUTTON_MENU";
+	case VIVE_CONTROLLER_BUTTON_GRIP:
+		return "VIVE_CONTROLLER_BUTTON_GRIP";
+	case VIVE_CONTROLLER_BUTTON_SYSTEM:
+		return "VIVE_CONTROLLER_BUTTON_SYSTEM";
+	case VIVE_CONTROLLER_BUTTON_THUMB:
+		return "VIVE_CONTROLLER_BUTTON_THUMB";
+	case VIVE_CONTROLLER_BUTTON_TOUCH:
+		return "VIVE_CONTROLLER_BUTTON_TOUCH";
+	case VIVE_CONTROLLER_BUTTON_TRIGGER:
+		return "VIVE_CONTROLLER_BUTTON_TRIGGER";
+	}
+}
+
+#define BUTTON_PRESSED	0x80
+
+void handle_buttons(uint32_t buttons, uint32_t last_buttons, uint8_t map_length,
+                    const button_map *map)
+{
+	uint8_t btn_codes[map_length];
+	int num_buttons = 0;
+	int i;
+
+	for (i = 0; i < map_length; i++) {
+		uint32_t bit = map[i].bit;
+
+		if ((buttons ^ last_buttons) & bit) {
+			btn_codes[num_buttons] = map[i].code;
+			if (buttons & bit) {
+				printf("Pressed  %s\n", vive_button_to_string(bit));
+				btn_codes[num_buttons] |= BUTTON_PRESSED;
+			} else {
+				printf("Released %s\n", vive_button_to_string(bit));
+			}
+			num_buttons++;
+		}
+	}
+
+	//telemetry_send_buttons(dev_id, btn_codes, num_buttons);
+}
+
 
 static void controller_handle_buttons(vive_priv* priv, uint8_t buttons)
 {
-	/*
-	if (buttons != self->buttons) {
-		//ouvrt_handle_buttons(self->dev.id, buttons, self->buttons,
-		//		     6, vive_controller_button_map);
-		self->buttons = buttons;
+
+	if (buttons != priv->buttons) {
+		handle_buttons(buttons, priv->buttons, 6, controller_button_map);
+		priv->buttons = buttons;
 	}
-	*/
+
 }
 
 static void controller_handle_touch_position(vive_priv* priv, uint8_t *buf)
@@ -243,6 +294,7 @@ static void controller_handle_touch_position(vive_priv* priv, uint8_t *buf)
 	int16_t x = __le16_to_cpup((__le16 *)buf);
 	int16_t y = __le16_to_cpup((__le16 *)(buf + 2));
 
+	//printf("Touch position: %d %d\n", x, y);
 	/*
 	if (x != self->touch_pos[0] ||
 	    y != self->touch_pos[1]) {
@@ -255,6 +307,7 @@ static void controller_handle_touch_position(vive_priv* priv, uint8_t *buf)
 static void controller_handle_analog_trigger(vive_priv* priv,
                                              uint8_t squeeze)
 {
+	//printf("Analog trigger %d\n", squeeze);
 	/*
 	if (squeeze != self->squeeze)
 		self->squeeze = squeeze;
@@ -305,13 +358,13 @@ static void controller_handle_imu_sample(vive_priv* priv, uint8_t *buf)
 
 	if(priv->last_controller_ticks2 == 0)
 		priv->last_controller_ticks2 = timestamp;
-
+/*
 	if (timestamp % 100 == 0)
 	{
 		printf("VIBRATE!\n");
 		controller_haptic_pulse(priv);
 	}
-
+*/
 	uint32_t t1, t2;
 	t1 = timestamp;
 	t2 = priv->last_controller_ticks2;
@@ -366,7 +419,6 @@ static void decode_controller_message(vive_priv* priv,
 
 		if (type & 0x10) {
 			if (type & 1) {
-				printf("Handle button!!\n");
 				controller_handle_buttons(priv, *buf++);
 			}
 			if (type & 2) {
