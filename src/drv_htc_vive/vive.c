@@ -853,12 +853,12 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 
 	switch (desc->revision) {
 		case REV_VIVE:
-			if (vive_read_config(priv) != 0)
+			if (vive_read_config(priv->imu_handle, &priv->imu_config) != 0)
 			{
 				LOGW("Could not read config. Using defaults.\n");
 			}
 
-			if (vive_get_range_packet(priv) != 0)
+			if (vive_get_range_packet(priv->imu_handle, &priv->imu_config) != 0)
 			{
 				LOGW("Could not get range packet.\n");
 			}
