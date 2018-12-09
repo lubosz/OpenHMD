@@ -262,6 +262,32 @@ static void controller_handle_analog_trigger(vive_priv* priv,
 	*/
 }
 
+static int controller_haptic_pulse(vive_priv* priv)
+{
+	const vive_controller_haptic_pulse_report report = {
+		.id = VIVE_CONTROLLER_COMMAND_PACKET_ID,
+		.command = VIVE_CONTROLLER_HAPTIC_PULSE_COMMAND,
+		.len = 7,
+		.unknown = { 0x00, 0xf4, 0x01, 0xb5, 0xa2, 0x01, 0x00 },
+	};
+
+	return hid_send_feature_report(priv->watchman_handle,
+	                              &report, sizeof(report));
+}
+
+static int controller_poweroff(vive_priv* priv)
+{
+	const vive_controller_poweroff_report report = {
+		.id = VIVE_CONTROLLER_COMMAND_PACKET_ID,
+		.command = VIVE_CONTROLLER_POWEROFF_COMMAND,
+		.len = 4,
+		.magic = { 'o', 'f', 'f', '!' },
+	};
+
+	return hid_send_feature_report(priv->watchman_handle,
+	                              &report, sizeof(report));
+}
+
 static void controller_handle_imu_sample(vive_priv* priv, uint8_t *buf)
 {
 	/* Time in 48 MHz ticks, but we are missing the low byte */
@@ -279,6 +305,12 @@ static void controller_handle_imu_sample(vive_priv* priv, uint8_t *buf)
 
 	if(priv->last_controller_ticks2 == 0)
 		priv->last_controller_ticks2 = timestamp;
+
+	if (timestamp % 100 == 0)
+	{
+		printf("VIBRATE!\n");
+		controller_haptic_pulse(priv);
+	}
 
 	uint32_t t1, t2;
 	t1 = timestamp;
@@ -459,6 +491,10 @@ static void close_device(ohmd_device* device)
 		default:
 			LOGE("Unknown VIVE revision.\n");
 	}
+
+	controller_poweroff(priv);
+
+	hid_close(priv->watchman_handle);
 
 	hid_close(priv->hmd_handle);
 	hid_close(priv->imu_handle);

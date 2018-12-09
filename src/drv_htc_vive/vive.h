@@ -28,7 +28,7 @@ typedef enum
   VIVE_CONTROLLER_PACKET1_ID = 0x23,
   VIVE_CONTROLLER_PACKET2_ID = 0x24,
   VIVE_CONTROLLER_DISCONNECT_PACKET_ID = 0x26,
-
+  VIVE_CONTROLLER_COMMAND_PACKET_ID = 0xff
 } vive_irq_cmd;
 
 #define VIVE_CONTROLLER_BATTERY_CHARGING		0x80
@@ -120,6 +120,25 @@ typedef struct
 	uint8_t id;
 	vive_controller_message message[2];
 } __attribute__((packed)) vive_controller_packet2;
+
+
+#define VIVE_CONTROLLER_HAPTIC_PULSE_COMMAND		0x8f
+
+typedef struct {
+	uint8_t id;
+	uint8_t command;
+	uint8_t len;
+	uint8_t unknown[7];
+} __attribute__((packed)) vive_controller_haptic_pulse_report;
+
+#define VIVE_CONTROLLER_POWEROFF_COMMAND		0x9f
+
+typedef struct {
+	uint8_t id;
+	uint8_t command;
+	uint8_t len;
+	uint8_t magic[4];
+} __attribute__((packed)) vive_controller_poweroff_report;
 
 
 void vec3f_from_vive_vec(const int16_t* smp, vec3f* out_vec);
