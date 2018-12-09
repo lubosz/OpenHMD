@@ -29,6 +29,7 @@
 #include <limits.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <unistd.h>
 
 #include "vive.h"
 
@@ -392,13 +393,33 @@ int vive_read_config(vive_priv* priv)
 		.id = VIVE_CONFIG_READ_PACKET_ID,
 	};
 
-	unsigned char* packet_buffer = malloc(4096);
+	unsigned char* packet_buffer;
 
-	int offset = 0;
+	int tries = 0;
+	int offset;
+
+	packet_buffer = calloc(4096, sizeof(unsigned char));
+	offset = 0;
+start_reading:
+
 	do {
+		//sleep(1);
 		bytes = hid_get_feature_report(priv->imu_handle,
 		                               (unsigned char*) &read_packet,
 		                               sizeof(read_packet));
+
+		if (bytes == -1)
+		{
+			LOGE("Could not get config read report. Retrying");
+			tries++;
+			if (tries > 100) {
+				free(packet_buffer);
+				return -1;
+			}
+			goto start_reading;
+		}
+		printf("💕 Config read report is %d bytes. Packet length %d\n",
+		       bytes, read_packet.length);
 
 		memcpy((uint8_t*)packet_buffer + offset,
 		       &read_packet.payload,

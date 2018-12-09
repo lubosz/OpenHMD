@@ -110,6 +110,9 @@ bool vive_decode_config_packet(vive_imu_config* result,
 
 	int cmp_status = uncompress(output, &output_size,
 	                            buffer, (mz_ulong)size);
+
+	printf("\nCompressed config:\n%s\n", buffer);
+
 	if (cmp_status != Z_OK){
 		LOGE("invalid vive config, could not uncompress");
 		return false;
@@ -119,6 +122,8 @@ bool vive_decode_config_packet(vive_imu_config* result,
 	     (mz_uint32)packet.length, (mz_uint32)output_size);
 
 	trim((char*)output, (char*)output, (unsigned int)output_size);
+
+	printf("DATA:\n\n%s\n\n", (char*) output);
 
 	const nx_json* json = nx_json_parse((char*)output, 0);
 
