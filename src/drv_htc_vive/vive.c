@@ -1023,8 +1023,39 @@ static void get_device_list(ohmd_driver* driver, ohmd_device_list* list)
 		desc->device_class = OHMD_DEVICE_CLASS_HMD;
 		desc->device_flags = OHMD_DEVICE_FLAGS_ROTATIONAL_TRACKING;
 
+		desc->id = idx++;
+
+		// Controller 0
+		desc = &list->devices[list->num_devices++];
+
+		strcpy(desc->driver, "OpenHMD HTC Vive Driver");
+		strcpy(desc->vendor, "HTC/Valve");
+		strcpy(desc->product, "HTC Vive: Controller 0");
+
+		strcpy(desc->path, cur_dev->path);
+
+		desc->device_flags = OHMD_DEVICE_FLAGS_ROTATIONAL_TRACKING;
+		desc->device_class = OHMD_DEVICE_CLASS_CONTROLLER;
+
+		desc->driver_ptr = driver;
+		desc->id = idx++;
+
+		// Controller 1
+		desc = &list->devices[list->num_devices++];
+
+		strcpy(desc->driver, "OpenHMD HTC Vive Driver");
+		strcpy(desc->vendor, "HTC/Valve");
+		strcpy(desc->product, "HTC Vive: Controller 1");
+
+		strcpy(desc->path, cur_dev->path);
+
+		desc->device_flags = OHMD_DEVICE_FLAGS_ROTATIONAL_TRACKING;
+		desc->device_class = OHMD_DEVICE_CLASS_CONTROLLER;
+
+		desc->driver_ptr = driver;
+		desc->id = idx++;
+
 		cur_dev = cur_dev->next;
-		idx++;
 	}
 
 	hid_free_enumeration(devs);
