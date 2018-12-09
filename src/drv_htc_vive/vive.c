@@ -545,6 +545,12 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 			                               vive_magic_power_on,
 			                               sizeof(vive_magic_power_on));
 			LOGI("power on magic: %d\n", hret);
+
+			if (vive_read_firmware(priv->imu_handle) != 0)
+			{
+				LOGE("Could not get headset firmware version!");
+			}
+
 			break;
 		case REV_VIVE_PRO:
 			// turn the display on
@@ -571,10 +577,7 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 	LOGD("enable lighthouse magic: %d\n", hret);
 #endif
 
-	if (vive_read_firmware(priv->imu_handle) != 0)
-	{
-		LOGE("Could not get headset firmware version!");
-	}
+
 
 	if (vive_read_config(priv) != 0)
 	{
