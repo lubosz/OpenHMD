@@ -30,6 +30,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <asm/byteorder.h>
+#include <inttypes.h>
 
 #include "vive.h"
 
@@ -49,12 +50,16 @@ typedef struct {
 	uint32_t last_ticks;
 	uint8_t last_seq;
 
+	uint32_t last_controller_ticks;
+	uint32_t last_controller_ticks2;
+
 	vec3f gyro_error;
 	filter_queue gyro_q;
 
 	vive_revision revision;
 
 	vive_imu_config imu_config;
+	vive_imu_config controller_imu_config;
 
 } vive_priv;
 
@@ -260,7 +265,7 @@ static void controller_handle_analog_trigger(vive_priv* priv,
 static void controller_handle_imu_sample(vive_priv* priv, uint8_t *buf)
 {
 	/* Time in 48 MHz ticks, but we are missing the low byte */
-	//uint32_t timestamp = self->timestamp | *buf;
+	uint32_t timestamp = priv->last_controller_ticks | *buf;
 	int16_t accel[3] = {
 		__le16_to_cpup((__le16 *)(buf + 1)),
 		__le16_to_cpup((__le16 *)(buf + 3)),
@@ -271,6 +276,59 @@ static void controller_handle_imu_sample(vive_priv* priv, uint8_t *buf)
 		__le16_to_cpup((__le16 *)(buf + 9)),
 		__le16_to_cpup((__le16 *)(buf + 11)),
 	};
+
+	//printf("Accel: %d %d %d\n", accel[0], accel[1], accel[2]);
+	//printf("Gyro: %d %d %d\n", gyro[0], gyro[1], gyro[2]);
+
+	if(priv->last_controller_ticks2 == 0)
+		priv->last_controller_ticks2 = timestamp;
+
+	uint32_t t1, t2;
+	t1 = timestamp;
+	t2 = priv->last_controller_ticks2;
+
+	float dt = (t1 - t2) / VIVE_CLOCK_FREQ;
+
+	priv->last_controller_ticks2 = timestamp;
+
+	float range = priv->controller_imu_config.acc_range / 32768.0f;
+
+	vec3f accel_vec;
+	/*
+	accel_vec.x = range * priv->imu_config.acc_scale.x * (float) accel[0] - priv->imu_config.acc_bias.x;
+	accel_vec.y = range * priv->imu_config.acc_scale.y * (float) accel[1] - priv->imu_config.acc_bias.y;
+	accel_vec.z = range * priv->imu_config.acc_scale.z * (float) accel[2] - priv->imu_config.acc_bias.z;
+*/
+	accel_vec.x = range * (float) accel[0];
+	accel_vec.y = range * (float) accel[1];
+	accel_vec.z = range * (float) accel[2];
+	printf("Accel: %f %f %f\n", accel_vec.x, accel_vec.y, accel_vec.z);
+
+	float gyro_range = priv->controller_imu_config.gyro_range / 32768.0f;
+	vec3f gyro_vec;
+/*
+	gyro_vec.x = gyro_range * priv->imu_config.gyro_scale.x * (float)gyro[0] - priv->imu_config.gyro_bias.x;
+	gyro_vec.y = gyro_range * priv->imu_config.gyro_scale.y * (float)gyro[1] - priv->imu_config.gyro_bias.x;
+	gyro_vec.z = gyro_range * priv->imu_config.gyro_scale.z * (float)gyro[2] - priv->imu_config.gyro_bias.x;
+*/
+	gyro_vec.x = gyro_range * (float)gyro[0];
+	gyro_vec.y = gyro_range * (float)gyro[1];
+	gyro_vec.z = gyro_range * (float)gyro[2];
+
+	printf("gyro_vec: %f %f %f\n", gyro_vec.x, gyro_vec.y, gyro_vec.z);
+
+	printf("ticks: %" PRIu32 "\n", timestamp);
+
+	vec3f mag = {{0.0f, 0.0f, 0.0f}};
+
+	//vec3f mod_gyro;
+	//ovec3f_subtract(&gyro_vec, &priv->gyro_error, &mod_gyro);
+
+	printf("Last time %u. New time %u\n", priv->last_controller_ticks2, timestamp);
+	printf("DEE TEE %f\n", dt);
+
+	ofusion_update(&priv->sensor_fusion, dt,
+	               &gyro_vec, &accel_vec, &mag);
 
 	//(void)timestamp;
 	(void)accel;
@@ -291,8 +349,8 @@ static void decode_controller_message(vive_priv* priv,
 	//self->timestamp = (message->timestamp_hi << 24) |
 	//		  (message->timestamp_lo << 16);
 
-	uint32_t timestamp = (message->timestamp_hi << 24) |
-	                     (message->timestamp_lo << 16);
+	priv->last_controller_ticks = (message->timestamp_hi << 24) |
+	                              (message->timestamp_lo << 16);
 	// printf("timestamp: %ld\n", timestamp);
 
 	/*
@@ -353,7 +411,7 @@ static void read_controller_reports(vive_priv* priv)
 			decode_controller_message(priv, &pkt->message);
 
 		} else if (buffer[0] == VIVE_CONTROLLER_PACKET2_ID) {
-			LOGI("Got controller packet 2.");
+			//LOGI("Got controller packet 2.");
 		} else if (buffer[0] == VIVE_CONTROLLER_DISCONNECT_PACKET_ID) {
 			LOGI("Got controller disconnected.");
 		}else{
@@ -720,13 +778,12 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 
 	//vive_read_config_controller(priv);
 
-	vive_imu_config watchman_imu_config;
-	if (vive_read_config(priv->watchman_handle, &watchman_imu_config) != 0)
+	if (vive_read_config(priv->watchman_handle, &priv->controller_imu_config) != 0)
 	{
 		LOGE("Could not get watchman config!");
 	}
 
-	if (vive_get_range_packet(priv->watchman_handle, &watchman_imu_config) != 0)
+	if (vive_get_range_packet(priv->watchman_handle, &priv->controller_imu_config) != 0)
 	{
 		LOGW("Could not get controller imu range packet.\n");
 	}
