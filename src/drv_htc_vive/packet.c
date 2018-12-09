@@ -69,6 +69,38 @@ bool vive_decode_sensor_packet(vive_headset_imu_packet* pkt,
 	return true;
 }
 
+bool vive_decode_controller_packet1(vive_controller_packet1* pkt,
+                                    const unsigned char* buffer, int size)
+{
+	/*
+	if(size != 52){
+		LOGE("invalid vive sensor packet size (expected 52 but got %d)", size);
+		return false;
+	}
+	*/
+
+	pkt->id = read8(&buffer);
+	//pkt->id = read8(&buffer);
+	//pkt->id = read8(&buffer);
+/*
+	for(int j = 0; j < 3; j++){
+		// acceleration
+		for(int i = 0; i < 3; i++){
+			pkt->samples[j].acc[i] = read16(&buffer);
+		}
+
+		// rotation
+		for(int i = 0; i < 3; i++){
+			pkt->samples[j].rot[i] = read16(&buffer);
+		}
+
+		pkt->samples[j].time_ticks = read32(&buffer);
+		pkt->samples[j].seq = read8(&buffer);
+	}
+*/
+	return true;
+}
+
 //Trim function for removing tabs and spaces from string buffers
 void trim(const char* src, char* buff, const unsigned int sizeBuff)
 {

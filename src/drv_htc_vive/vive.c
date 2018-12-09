@@ -29,6 +29,7 @@
 #include <limits.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <asm/byteorder.h>
 
 #include "vive.h"
 
@@ -198,6 +199,145 @@ static void read_headset_reports(vive_priv* priv)
 
 }
 
+static void controller_handle_battery(vive_priv* priv, uint8_t battery)
+{
+	uint8_t charge_percent = battery & VIVE_CONTROLLER_BATTERY_CHARGE_MASK;
+	bool charging = battery & VIVE_CONTROLLER_BATTERY_CHARGING;
+
+	//if (battery != self->battery)
+	//	self->battery = battery;
+
+	(void)charge_percent;
+	(void)charging;
+}
+
+/*
+static const struct button_map controller_button_map[6] = {
+	{ VIVE_CONTROLLER_BUTTON_MENU, OUVRT_BUTTON_MENU },
+	{ VIVE_CONTROLLER_BUTTON_GRIP, OUVRT_BUTTON_GRIP },
+	{ VIVE_CONTROLLER_BUTTON_SYSTEM, OUVRT_BUTTON_SYSTEM },
+	{ VIVE_CONTROLLER_BUTTON_THUMB, OUVRT_BUTTON_THUMB },
+	{ VIVE_CONTROLLER_BUTTON_TOUCH, OUVRT_TOUCH_THUMB },
+	{ VIVE_CONTROLLER_BUTTON_TRIGGER, OUVRT_BUTTON_TRIGGER },
+};
+*/
+
+static void controller_handle_buttons(vive_priv* priv, uint8_t buttons)
+{
+	/*
+	if (buttons != self->buttons) {
+		//ouvrt_handle_buttons(self->dev.id, buttons, self->buttons,
+		//		     6, vive_controller_button_map);
+		self->buttons = buttons;
+	}
+	*/
+}
+
+static void controller_handle_touch_position(vive_priv* priv, uint8_t *buf)
+{
+	int16_t x = __le16_to_cpup((__le16 *)buf);
+	int16_t y = __le16_to_cpup((__le16 *)(buf + 2));
+
+	/*
+	if (x != self->touch_pos[0] ||
+	    y != self->touch_pos[1]) {
+		self->touch_pos[0] = x;
+		self->touch_pos[1] = y;
+	}
+	*/
+}
+
+static void controller_handle_analog_trigger(vive_priv* priv,
+                                             uint8_t squeeze)
+{
+	/*
+	if (squeeze != self->squeeze)
+		self->squeeze = squeeze;
+
+	*/
+}
+
+static void controller_handle_imu_sample(vive_priv* priv, uint8_t *buf)
+{
+	/* Time in 48 MHz ticks, but we are missing the low byte */
+	//uint32_t timestamp = self->timestamp | *buf;
+	int16_t accel[3] = {
+		__le16_to_cpup((__le16 *)(buf + 1)),
+		__le16_to_cpup((__le16 *)(buf + 3)),
+		__le16_to_cpup((__le16 *)(buf + 5)),
+	};
+	int16_t gyro[3] = {
+		__le16_to_cpup((__le16 *)(buf + 7)),
+		__le16_to_cpup((__le16 *)(buf + 9)),
+		__le16_to_cpup((__le16 *)(buf + 11)),
+	};
+
+	//(void)timestamp;
+	(void)accel;
+	(void)gyro;
+}
+
+/*
+ * Decodes multiplexed Wireless Receiver messages.
+ */
+static void decode_controller_message(vive_priv* priv,
+                                      vive_controller_message *message)
+{
+	unsigned char *buf = message->payload;
+	unsigned char *end = message->payload + message->len - 1;
+	bool silent = true;
+	int i;
+
+	//self->timestamp = (message->timestamp_hi << 24) |
+	//		  (message->timestamp_lo << 16);
+
+	uint32_t timestamp = (message->timestamp_hi << 24) |
+	                     (message->timestamp_lo << 16);
+	// printf("timestamp: %ld\n", timestamp);
+
+	/*
+	 * Handle button, touch, and IMU events. The first byte of each event
+	 * has the three most significant bits set.
+	 */
+	while ((buf < end) && ((*buf >> 5) == 7)) {
+		uint8_t type = *buf++;
+
+		if (type & 0x10) {
+			if (type & 1) {
+				printf("Handle button!!\n");
+				controller_handle_buttons(priv, *buf++);
+			}
+			if (type & 2) {
+				controller_handle_touch_position(priv, buf);
+				buf += 4;
+			}
+			if (type & 4) {
+				controller_handle_analog_trigger(priv, *buf++);
+			}
+		} else {
+			if (type & 1)
+				controller_handle_battery(priv, *buf++);
+			if (type & 2) {
+				/* unknown, does ever happen? */
+				silent = false;
+				buf++;
+			}
+		}
+		if (type & 8) {
+			controller_handle_imu_sample(priv, buf);
+			buf += 13;
+		}
+	}
+
+	if (buf > end)
+		printf("overshoot: %ld\n", buf - end);
+	//if (!silent || buf > end)
+	//	vive_controller_dump_message(priv, message);
+	if (buf >= end)
+		return;
+
+}
+
 static void read_controller_reports(vive_priv* priv)
 {
 	int size = 0;
@@ -208,6 +348,14 @@ static void read_controller_reports(vive_priv* priv)
 		if(buffer[0] == VIVE_HMD_IMU_PACKET_ID){
 			printf("got VIVE_HMD_IMU_PACKET_ID\n");
 			//handle_imu_packet(priv, buffer, size);
+		} else if (buffer[0] == VIVE_CONTROLLER_PACKET1_ID) {
+			vive_controller_packet1 *pkt = (vive_controller_packet1 *) buffer;
+			decode_controller_message(priv, &pkt->message);
+
+		} else if (buffer[0] == VIVE_CONTROLLER_PACKET2_ID) {
+			LOGI("Got controller packet 2.");
+		} else if (buffer[0] == VIVE_CONTROLLER_DISCONNECT_PACKET_ID) {
+			LOGI("Got controller disconnected.");
 		}else{
 			LOGE("unknown message type: %u", buffer[0]);
 		}
