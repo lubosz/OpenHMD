@@ -259,33 +259,10 @@ const char* vive_button_to_string(int button)
 	}
 }
 
-void handle_buttons(uint32_t buttons, uint32_t last_buttons,
-                    uint8_t map_length, const button_map *map)
-{
-	uint8_t btn_codes[map_length];
-	int num_buttons = 0;
-	int i;
-
-	for (i = 0; i < map_length; i++) {
-		uint32_t bit = map[i].bit;
-
-		if ((buttons ^ last_buttons) & bit) {
-			btn_codes[num_buttons] = map[i].code;
-			if (buttons & bit) {
-				printf("Pressed  %s\n", vive_button_to_string(bit));
-				btn_codes[num_buttons] |= BUTTON_PRESSED;
-			} else {
-				printf("Released %s\n", vive_button_to_string(bit));
-			}
-			num_buttons++;
-		}
-	}
-}
-
 static void controller_handle_buttons(vive_priv* priv, uint8_t buttons)
 {
 	if (buttons != priv->state.digital) {
-		handle_buttons(buttons, priv->state.digital, 6, controller_button_map);
+		// handle_buttons(buttons, priv->state.digital, 6, controller_button_map);
 		priv->state.digital = buttons;
 	}
 }
@@ -467,6 +444,26 @@ static void update_device(ohmd_device* device)
 	}
 }
 
+void handle_buttons(uint32_t buttons, uint32_t last_buttons,
+                    uint8_t map_length, const button_map *map)
+{
+	int num_buttons = 0;
+	int i;
+
+	for (i = 0; i < map_length; i++) {
+		uint32_t bit = map[i].bit;
+
+		if ((buttons ^ last_buttons) & bit) {
+			if (buttons & bit) {
+				printf("Pressed  %s\n", vive_button_to_string(bit));
+			} else {
+				printf("Released %s\n", vive_button_to_string(bit));
+			}
+			num_buttons++;
+		}
+	}
+}
+
 static int getf(ohmd_device* device, ohmd_float_value type, float* out)
 {
 	vive_priv* priv = (vive_priv*)device;
@@ -483,6 +480,20 @@ static int getf(ohmd_device* device, ohmd_float_value type, float* out)
 	case OHMD_DISTORTION_K:
 		// TODO this should be set to the equivalent of no distortion
 		memset(out, 0, sizeof(float) * 6);
+		break;
+
+	case OHMD_CONTROLS_STATE:
+		if (priv->type != VIVE_HEADSET) {
+			out[0] = priv->state.digital & VIVE_CONTROLLER_BUTTON_MENU ? 1.0 : 0.0;
+			out[1] = priv->state.digital & VIVE_CONTROLLER_BUTTON_GRIP ? 1.0 : 0.0;
+			out[2] = priv->state.digital & VIVE_CONTROLLER_BUTTON_SYSTEM ? 1.0 : 0.0;
+			out[3] = priv->state.digital & VIVE_CONTROLLER_BUTTON_THUMB ? 1.0 : 0.0;
+			out[4] = priv->state.digital & VIVE_CONTROLLER_BUTTON_TOUCH ? 1.0 : 0.0;
+			out[5] = priv->state.digital & VIVE_CONTROLLER_BUTTON_TRIGGER ? 1.0 : 0.0;
+			out[6] = priv->state.touch_position.x;
+			out[7] = priv->state.touch_position.y;
+			out[8] = priv->state.analog_trigger;
+		}
 		break;
 
 	default:
@@ -780,6 +791,29 @@ static int open_controller(vive_priv* priv, int idx, uint32_t i)
 	if (vive_get_range_packet(priv) != 0)
 		LOGW("Could not get watchman IMU range packet!");
 
+	printf("Setting up device props 👍👍👍👍\n");
+
+	priv->base.properties.control_count = 9;
+	priv->base.properties.controls_hints[0] = OHMD_MENU;
+	priv->base.properties.controls_hints[1] = OHMD_SQUEEZE;
+	priv->base.properties.controls_hints[2] = OHMD_HOME;
+	priv->base.properties.controls_hints[3] = OHMD_ANALOG_PRESS;
+	priv->base.properties.controls_hints[4] = OHMD_TOUCHPAD_TOUCH;
+	priv->base.properties.controls_hints[5] = OHMD_TRIGGER_CLICK;
+	priv->base.properties.controls_hints[6] = OHMD_ANALOG_X;
+	priv->base.properties.controls_hints[7] = OHMD_ANALOG_Y;
+	priv->base.properties.controls_hints[8] = OHMD_TRIGGER;
+
+	priv->base.properties.controls_types[0] = OHMD_DIGITAL;
+	priv->base.properties.controls_types[1] = OHMD_DIGITAL;
+	priv->base.properties.controls_types[2] = OHMD_DIGITAL;
+	priv->base.properties.controls_types[3] = OHMD_DIGITAL;
+	priv->base.properties.controls_types[4] = OHMD_DIGITAL;
+	priv->base.properties.controls_types[5] = OHMD_DIGITAL;
+	priv->base.properties.controls_types[6] = OHMD_ANALOG;
+	priv->base.properties.controls_types[7] = OHMD_ANALOG;
+	priv->base.properties.controls_types[8] = OHMD_ANALOG;
+
 	return 0;
 }
 
@@ -958,6 +992,9 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 		  goto cleanup;
 		break;
 	}
+
+	// Set default device properties
+	ohmd_set_default_device_properties(&priv->base.properties);
 
 	// set up device callbacks
 	priv->base.update = update_device;
