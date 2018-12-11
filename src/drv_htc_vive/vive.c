@@ -229,29 +229,6 @@ static void controller_handle_battery(vive_priv* priv, uint8_t battery)
 	priv->charging = battery & VIVE_CONTROLLER_BATTERY_CHARGING;
 }
 
-#if 0
-const char* vive_button_to_string(int button)
-{
-	switch (button)
-	{
-	case VIVE_CONTROLLER_BUTTON_MENU:
-		return "VIVE_CONTROLLER_BUTTON_MENU";
-	case VIVE_CONTROLLER_BUTTON_GRIP:
-		return "VIVE_CONTROLLER_BUTTON_GRIP";
-	case VIVE_CONTROLLER_BUTTON_SYSTEM:
-		return "VIVE_CONTROLLER_BUTTON_SYSTEM";
-	case VIVE_CONTROLLER_BUTTON_THUMB:
-		return "VIVE_CONTROLLER_BUTTON_THUMB";
-	case VIVE_CONTROLLER_BUTTON_TOUCH:
-		return "VIVE_CONTROLLER_BUTTON_TOUCH";
-	case VIVE_CONTROLLER_BUTTON_TRIGGER:
-		return "VIVE_CONTROLLER_BUTTON_TRIGGER";
-	default:
-		return "VIVE_UNKNOWN_BUTTON";
-	}
-}
-#endif
-
 static void controller_handle_buttons(vive_priv* priv, uint8_t buttons)
 {
 	priv->state.digital = buttons;
@@ -407,7 +384,7 @@ static void update_controller(ohmd_device* device)
 		} else if (buffer[0] == VIVE_CONTROLLER_DISCONNECT_PACKET_ID) {
 			LOGI("Controller disconnected.");
 		}else{
-			LOGE("unknown message type: %u", buffer[0]);
+			LOGE("Unknown controller message type: %u", buffer[0]);
 		}
 	}
 
@@ -416,7 +393,7 @@ static void update_controller(ohmd_device* device)
 	}
 }
 
-static int getf(ohmd_device* device, ohmd_float_value type, float* out)
+static int getf_headset(ohmd_device* device, ohmd_float_value type, float* out)
 {
 	vive_priv* priv = (vive_priv*)device;
 
@@ -434,18 +411,39 @@ static int getf(ohmd_device* device, ohmd_float_value type, float* out)
 		memset(out, 0, sizeof(float) * 6);
 		break;
 
+	default:
+		ohmd_set_error(priv->base.ctx, "invalid type given to getf (%ud)", type);
+		return -1;
+		break;
+	}
+
+	return 0;
+}
+
+static int getf_controller(ohmd_device* device, ohmd_float_value type, float* out)
+{
+	vive_priv* priv = (vive_priv*) device;
+
+	switch(type){
+	case OHMD_ROTATION_QUAT:
+		*(quatf*)out = priv->sensor_fusion.orient;
+		break;
+
+	case OHMD_POSITION_VECTOR:
+		out[0] = out[1] = out[2] = 0;
+		break;
+
 	case OHMD_CONTROLS_STATE:
-		if (priv->type != VIVE_HEADSET) {
-			out[0] = priv->state.digital & VIVE_CONTROLLER_BUTTON_MENU ? 1.337 : 0.1337;
-			out[1] = priv->state.digital & VIVE_CONTROLLER_BUTTON_GRIP ? 1.337 : 0.1337;
-			out[2] = priv->state.digital & VIVE_CONTROLLER_BUTTON_SYSTEM ? 1.337 : 0.1337;
-			out[3] = priv->state.digital & VIVE_CONTROLLER_BUTTON_THUMB ? 1.337 : 0.1337;
-			out[4] = priv->state.digital & VIVE_CONTROLLER_BUTTON_TOUCH ? 1.337 : 0.1337;
-			out[5] = priv->state.digital & VIVE_CONTROLLER_BUTTON_TRIGGER ? 1.337 : 0.1337;
-			out[6] = priv->state.touch_position.x;
-			out[7] = priv->state.touch_position.y;
-			out[8] = priv->state.analog_trigger;
-		}
+		out[0] = priv->state.digital & VIVE_CONTROLLER_BUTTON_MENU ? 1.337 : 0.1337;
+		out[1] = priv->state.digital & VIVE_CONTROLLER_BUTTON_GRIP ? 1.337 : 0.1337;
+		out[2] = priv->state.digital & VIVE_CONTROLLER_BUTTON_SYSTEM ? 1.337 : 0.1337;
+		out[3] = priv->state.digital & VIVE_CONTROLLER_BUTTON_THUMB ? 1.337 : 0.1337;
+		out[4] = priv->state.digital & VIVE_CONTROLLER_BUTTON_TOUCH ? 1.337 : 0.1337;
+		out[5] = priv->state.digital & VIVE_CONTROLLER_BUTTON_TRIGGER ? 1.337 : 0.1337;
+		out[6] = priv->state.touch_position.x;
+		out[7] = priv->state.touch_position.y;
+		out[8] = priv->state.analog_trigger;
+
 		break;
 
 	default:
@@ -752,19 +750,16 @@ static int open_controller(vive_priv* priv, int idx, uint32_t i)
 	priv->base.properties.controls_hints[3] = OHMD_ANALOG_PRESS;
 	priv->base.properties.controls_hints[4] = OHMD_TOUCHPAD_TOUCH;
 	priv->base.properties.controls_hints[5] = OHMD_TRIGGER_CLICK;
+
+	for (int i = 0; i < 6; i++)
+		priv->base.properties.controls_types[i] = OHMD_DIGITAL;
+
 	priv->base.properties.controls_hints[6] = OHMD_ANALOG_X;
 	priv->base.properties.controls_hints[7] = OHMD_ANALOG_Y;
 	priv->base.properties.controls_hints[8] = OHMD_TRIGGER;
 
-	priv->base.properties.controls_types[0] = OHMD_DIGITAL;
-	priv->base.properties.controls_types[1] = OHMD_DIGITAL;
-	priv->base.properties.controls_types[2] = OHMD_DIGITAL;
-	priv->base.properties.controls_types[3] = OHMD_DIGITAL;
-	priv->base.properties.controls_types[4] = OHMD_DIGITAL;
-	priv->base.properties.controls_types[5] = OHMD_DIGITAL;
-	priv->base.properties.controls_types[6] = OHMD_ANALOG;
-	priv->base.properties.controls_types[7] = OHMD_ANALOG;
-	priv->base.properties.controls_types[8] = OHMD_ANALOG;
+	for (int i = 6; i < 9; i++)
+		priv->base.properties.controls_types[i] = OHMD_ANALOG;
 
 	return 0;
 }
@@ -953,13 +948,14 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 	{
 		priv->base.update = update_headset;
 		priv->base.close = close_headset;
+		priv->base.getf = getf_headset;
 	}
 	else
 	{
 		priv->base.update = update_controller;
 		priv->base.close = close_controller;
+		priv->base.getf = getf_controller;
 	}
-	priv->base.getf = getf;
 
 	ofusion_init(&priv->sensor_fusion);
 
