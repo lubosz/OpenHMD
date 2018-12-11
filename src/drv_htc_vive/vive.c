@@ -517,34 +517,33 @@ static void close_device(ohmd_device* device)
 	int hret = 0;
 	vive_priv* priv = (vive_priv*)device;
 
-	LOGD("closing HTC Vive device");
-
-	// turn the display off
-	switch (priv->revision) {
-		case REV_VIVE:
-			hret = hid_send_feature_report(priv->hmd_handle,
-			                               vive_magic_power_off1,
-			                               sizeof(vive_magic_power_off1));
-			LOGI("power off magic 1: %d\n", hret);
-
-			hret = hid_send_feature_report(priv->hmd_handle,
-			                               vive_magic_power_off2,
-			                               sizeof(vive_magic_power_off2));
-			LOGI("power off magic 2: %d\n", hret);
-			break;
-		case REV_VIVE_PRO:
-			hret = hid_send_feature_report(priv->hmd_handle,
-			                               vive_pro_magic_power_off,
-			                               sizeof(vive_pro_magic_power_off));
-			LOGI("vive pro power off magic: %d\n", hret);
-			break;
-		default:
-			LOGE("Unknown VIVE revision.\n");
-	}
+	LOGD("Closing HTC Vive device");
 
 	switch (priv->type)
 	{
 		case VIVE_HEADSET:
+			// turn the display off
+			switch (priv->revision) {
+				case REV_VIVE:
+					hret = hid_send_feature_report(priv->hmd_handle,
+							                           vive_magic_power_off1,
+							                           sizeof(vive_magic_power_off1));
+					LOGI("power off magic 1: %d\n", hret);
+
+					hret = hid_send_feature_report(priv->hmd_handle,
+							                           vive_magic_power_off2,
+							                           sizeof(vive_magic_power_off2));
+					LOGI("power off magic 2: %d\n", hret);
+					break;
+				case REV_VIVE_PRO:
+					hret = hid_send_feature_report(priv->hmd_handle,
+							                           vive_pro_magic_power_off,
+							                           sizeof(vive_pro_magic_power_off));
+					LOGI("vive pro power off magic: %d\n", hret);
+					break;
+				default:
+					LOGE("Unknown VIVE revision.\n");
+			}
 			hid_close(priv->hmd_handle);
 			break;
 		case VIVE_CONTROLLER_0:
@@ -956,6 +955,7 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 	priv->type = desc->id;
 
 	int idx = atoi(desc->path);
+	printf("The path is %s\n", desc->path);
 
 	/* IMU config defaults */
 	priv->imu_config.acc_bias.x = 0;
@@ -1051,7 +1051,8 @@ static void get_device_list(ohmd_driver* driver, ohmd_device_list* list)
 		strcpy(desc->vendor, "HTC/Valve");
 		strcpy(desc->product, "HTC Vive: Controller 0");
 
-		strcpy(desc->path, cur_dev->path);
+		//strcpy(desc->path, cur_dev->path);
+		snprintf(desc->path, OHMD_STR_SIZE, "%d", idx);
 
 		desc->device_flags = OHMD_DEVICE_FLAGS_ROTATIONAL_TRACKING;
 		desc->device_class = OHMD_DEVICE_CLASS_CONTROLLER;
@@ -1066,7 +1067,8 @@ static void get_device_list(ohmd_driver* driver, ohmd_device_list* list)
 		strcpy(desc->vendor, "HTC/Valve");
 		strcpy(desc->product, "HTC Vive: Controller 1");
 
-		strcpy(desc->path, cur_dev->path);
+		// strcpy(desc->path, cur_dev->path);
+		snprintf(desc->path, OHMD_STR_SIZE, "%d", idx);
 
 		desc->device_flags = OHMD_DEVICE_FLAGS_ROTATIONAL_TRACKING;
 		desc->device_class = OHMD_DEVICE_CLASS_CONTROLLER;
