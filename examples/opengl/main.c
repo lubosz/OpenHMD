@@ -144,6 +144,7 @@ void draw_controllers()
 
 		// Draw controller ray
 		glPushMatrix();
+		glColor3f(1, 1, 1);
 		glBegin(GL_LINES);
 		glVertex3f(0.0, 0.0, 0.0);
 		glVertex3f(0.0, 10.0, 0.0);
