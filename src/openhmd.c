@@ -643,3 +643,57 @@ ohmd_status ohmd_require_version(int major, int minor, int patch)
 
 	return OHMD_S_OK;
 }
+
+const char* ohmd_control_hint_to_str(ohmd_control_hint hint)
+{
+  switch(hint)
+  {
+  case OHMD_GENERIC:
+    return "OHMD_GENERIC";
+  case OHMD_TRIGGER:
+    return "OHMD_TRIGGER";
+  case OHMD_TRIGGER_CLICK:
+    return "OHMD_TRIGGER_CLICK";
+  case OHMD_SQUEEZE:
+    return "OHMD_SQUEEZE";
+  case OHMD_MENU:
+    return "OHMD_MENU";
+  case OHMD_HOME:
+    return "OHMD_HOME";
+  case OHMD_ANALOG_X:
+    return "OHMD_ANALOG_X";
+  case OHMD_ANALOG_Y:
+    return "OHMD_ANALOG_Y";
+  case OHMD_ANALOG_PRESS:
+    return "OHMD_ANALOG_PRESS";
+  case OHMD_BUTTON_A:
+    return "OHMD_BUTTON_A";
+  case OHMD_BUTTON_B:
+    return "OHMD_BUTTON_B";
+  case OHMD_BUTTON_X:
+    return "OHMD_BUTTON_X";
+  case OHMD_VOLUME_PLUS:
+    return "OHMD_VOLUME_PLUS";
+  case OHMD_VOLUME_MINUS:
+    return "OHMD_VOLUME_MINUS";
+  case OHMD_MIC_MUTE:
+    return "OHMD_MIC_MUTE";
+  case OHMD_TOUCHPAD_TOUCH:
+    return "OHMD_TOUCHPAD_TOUCH";
+  default:
+    return "UNKNOWN Hint";
+  }
+}
+
+const char* ohmd_control_type_to_str(ohmd_control_hint hint)
+{
+  switch(hint)
+  {
+  case OHMD_DIGITAL:
+    return "OHMD_DIGITAL";
+  case OHMD_ANALOG:
+    return "OHMD_ANALOG";
+  default:
+    return "UNKNOWN Type";
+  }
+}

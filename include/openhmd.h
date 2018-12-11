@@ -90,11 +90,15 @@ typedef enum {
 
 } ohmd_control_hint;
 
+const char* ohmd_control_hint_to_str(ohmd_control_hint hint);
+
 /** Control type. Indicates whether controls are digital or analog. */
 typedef enum {
 	OHMD_DIGITAL = 0,
 	OHMD_ANALOG = 1
 } ohmd_control_type;
+
+const char* ohmd_control_type_to_str(ohmd_control_hint hint);
 
 /** A collection of float value information types, used for getting and setting information with
     ohmd_device_getf() and ohmd_device_setf(). */
