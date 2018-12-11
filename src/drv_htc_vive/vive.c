@@ -607,6 +607,19 @@ int vive_read_firmware(hid_device* device)
 	return 0;
 }
 
+int hid_get_feature_report_tryout(hid_device *device,
+                                  void *data, size_t length, uint32_t tries)
+{
+	int ret = -1;
+	uint32_t try = 0;
+	while (ret < 0 && try < tries)
+	{
+		ret = hid_get_feature_report(device, (unsigned char*) data, length);
+		try++;
+	}
+	return ret;
+}
+
 int vive_read_config(vive_priv* priv)
 {
 	vive_config_start_packet start_packet = {
