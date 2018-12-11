@@ -342,26 +342,10 @@ static void controller_handle_imu_sample(vive_priv* priv, uint8_t *buf)
 {
 	/* Time in 48 MHz ticks, but we are missing the low byte */
 	uint32_t timestamp = priv->last_ticks | *buf;
-	int16_t accel[3] = {
-		__le16_to_cpup((__le16 *)(buf + 1)),
-		__le16_to_cpup((__le16 *)(buf + 3)),
-		__le16_to_cpup((__le16 *)(buf + 5)),
-	};
-	int16_t gyro[3] = {
-		__le16_to_cpup((__le16 *)(buf + 7)),
-		__le16_to_cpup((__le16 *)(buf + 9)),
-		__le16_to_cpup((__le16 *)(buf + 11)),
-	};
 
 	if(priv->last_controller_ticks2 == 0)
 		priv->last_controller_ticks2 = timestamp;
-/*
-	if (timestamp % 100 == 0)
-	{
-		printf("VIBRATE!\n");
-		controller_haptic_pulse(priv);
-	}
-*/
+
 	uint32_t t1, t2;
 	t1 = timestamp;
 	t2 = priv->last_controller_ticks2;
@@ -370,26 +354,29 @@ static void controller_handle_imu_sample(vive_priv* priv, uint8_t *buf)
 
 	priv->last_controller_ticks2 = timestamp;
 
-	float range = priv->imu_config.acc_range / 32768.0f;
+	int16_t accel[3] = {
+		__le16_to_cpup((__le16 *)(buf + 1)),
+		__le16_to_cpup((__le16 *)(buf + 3)),
+		__le16_to_cpup((__le16 *)(buf + 5)),
+	};
 
 	vec3f accel_vec;
-	accel_vec.x = range * priv->imu_config.acc_scale.x * (float) accel[0] - priv->imu_config.acc_bias.x;
-	accel_vec.y = range * priv->imu_config.acc_scale.y * (float) accel[1] - priv->imu_config.acc_bias.y;
-	accel_vec.z = range * priv->imu_config.acc_scale.z * (float) accel[2] - priv->imu_config.acc_bias.z;
-
-	float gyro_range = priv->imu_config.gyro_range / 32768.0f;
-	vec3f gyro_vec;
-	gyro_vec.x = gyro_range * priv->imu_config.gyro_scale.x * (float)gyro[0] - priv->imu_config.gyro_bias.x;
-	gyro_vec.y = gyro_range * priv->imu_config.gyro_scale.y * (float)gyro[1] - priv->imu_config.gyro_bias.x;
-	gyro_vec.z = gyro_range * priv->imu_config.gyro_scale.z * (float)gyro[2] - priv->imu_config.gyro_bias.x;
-
-	vec3f mag = {{0.0f, 0.0f, 0.0f}};
-
+	vec3f_from_vive_vec_accel(&priv->imu_config, accel, &accel_vec);
 	accel_vec.y *= -1;
 	accel_vec.z *= -1;
+
+	int16_t gyro[3] = {
+		__le16_to_cpup((__le16 *)(buf + 7)),
+		__le16_to_cpup((__le16 *)(buf + 9)),
+		__le16_to_cpup((__le16 *)(buf + 11)),
+	};
+
+	vec3f gyro_vec;
+	vec3f_from_vive_vec_gyro(&priv->imu_config, gyro, &gyro_vec);
 	gyro_vec.y *= -1;
 	gyro_vec.z *= -1;
 
+	vec3f mag = {{0.0f, 0.0f, 0.0f}};
 	ofusion_update(&priv->sensor_fusion, dt,
 	               &gyro_vec, &accel_vec, &mag);
 }
