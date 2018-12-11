@@ -47,6 +47,12 @@ typedef enum
 } vive_device_type;
 
 typedef struct {
+	vec2i touch_position;
+	float analog_trigger;
+	uint8_t digital;
+} vive_controller_state;
+
+typedef struct {
 	ohmd_device base;
 
 	hid_device* imu_handle;
@@ -65,9 +71,8 @@ typedef struct {
 	filter_queue gyro_q;
 
 	// controller only
-	uint8_t buttons;
 	uint32_t last_controller_ticks2;
-
+	vive_controller_state state;
 } vive_priv;
 
 
@@ -256,6 +261,8 @@ const char* vive_button_to_string(int button)
 		return "VIVE_CONTROLLER_BUTTON_TOUCH";
 	case VIVE_CONTROLLER_BUTTON_TRIGGER:
 		return "VIVE_CONTROLLER_BUTTON_TRIGGER";
+	default:
+		return "VIVE_UNKNOWN_BUTTON";
 	}
 }
 
@@ -282,45 +289,25 @@ void handle_buttons(uint32_t buttons, uint32_t last_buttons, uint8_t map_length,
 			num_buttons++;
 		}
 	}
-
-	//telemetry_send_buttons(dev_id, btn_codes, num_buttons);
 }
-
 
 static void controller_handle_buttons(vive_priv* priv, uint8_t buttons)
 {
-
-	if (buttons != priv->buttons) {
-		handle_buttons(buttons, priv->buttons, 6, controller_button_map);
-		priv->buttons = buttons;
+	if (buttons != priv->state.digital) {
+		handle_buttons(buttons, priv->state.digital, 6, controller_button_map);
+		priv->state.digital = buttons;
 	}
-
 }
 
 static void controller_handle_touch_position(vive_priv* priv, uint8_t *buf)
 {
-	int16_t x = __le16_to_cpup((__le16 *)buf);
-	int16_t y = __le16_to_cpup((__le16 *)(buf + 2));
-
-	//printf("Touch position: %d %d\n", x, y);
-	/*
-	if (x != self->touch_pos[0] ||
-	    y != self->touch_pos[1]) {
-		self->touch_pos[0] = x;
-		self->touch_pos[1] = y;
-	}
-	*/
+	priv->state.touch_position.x = __le16_to_cpup((__le16 *)buf);
+	priv->state.touch_position.y = __le16_to_cpup((__le16 *)(buf + 2));
 }
 
-static void controller_handle_analog_trigger(vive_priv* priv,
-                                             uint8_t squeeze)
+static void controller_handle_analog_trigger(vive_priv* priv, uint8_t analog)
 {
-	//printf("Analog trigger %d\n", squeeze);
-	/*
-	if (squeeze != self->squeeze)
-		self->squeeze = squeeze;
-
-	*/
+	priv->state.analog_trigger = analog;
 }
 
 static int controller_haptic_pulse(hid_device* device)
@@ -332,7 +319,9 @@ static int controller_haptic_pulse(hid_device* device)
 		.unknown = { 0x00, 0xf4, 0x01, 0xb5, 0xa2, 0x01, 0x00 },
 	};
 
-	return hid_send_feature_report(device, &report, sizeof(report));
+	return hid_send_feature_report(device,
+	                               (unsigned char*) &report,
+	                               sizeof(report));
 }
 
 static int controller_poweroff(hid_device* device)
@@ -344,7 +333,9 @@ static int controller_poweroff(hid_device* device)
 		.magic = { 'o', 'f', 'f', '!' },
 	};
 
-	return hid_send_feature_report(device, &report, sizeof(report));
+	return hid_send_feature_report(device,
+	                               (unsigned char*) &report,
+	                               sizeof(report));
 }
 
 static void controller_handle_imu_sample(vive_priv* priv, uint8_t *buf)
@@ -406,15 +397,9 @@ static void decode_controller_message(vive_priv* priv,
 {
 	unsigned char *buf = message->payload;
 	unsigned char *end = message->payload + message->len - 1;
-	bool silent = true;
-	int i;
-
-	//self->timestamp = (message->timestamp_hi << 24) |
-	//		  (message->timestamp_lo << 16);
 
 	priv->last_ticks = (message->timestamp_hi << 24) |
 	                   (message->timestamp_lo << 16);
-	// printf("timestamp: %ld\n", timestamp);
 
 	/*
 	 * Handle button, touch, and IMU events. The first byte of each event
@@ -439,7 +424,6 @@ static void decode_controller_message(vive_priv* priv,
 				controller_handle_battery(priv, *buf++);
 			if (type & 2) {
 				/* unknown, does ever happen? */
-				silent = false;
 				buf++;
 			}
 		}
@@ -450,9 +434,7 @@ static void decode_controller_message(vive_priv* priv,
 	}
 
 	if (buf > end)
-		printf("overshoot: %ld\n", buf - end);
-	//if (!silent || buf > end)
-	//	vive_controller_dump_message(priv, message);
+		LOGE("overshoot: %ld\n", buf - end);
 	if (buf >= end)
 		return;
 
