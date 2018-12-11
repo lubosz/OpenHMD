@@ -112,7 +112,7 @@ int main(int argc, char** argv)
 	int auto_update = 1;
 	ohmd_device_settings_seti(settings, OHMD_IDS_AUTOMATIC_UPDATE, &auto_update);
 
-	ohmd_device* hmd = ohmd_list_open_device_s(ctx, 1, settings);
+	ohmd_device* hmd = ohmd_list_open_device_s(ctx, 0, settings);
 	if(!hmd){
 		printf("failed to open device: %s\n", ohmd_ctx_get_error(ctx));
 		return 1;
@@ -152,6 +152,11 @@ int main(int argc, char** argv)
 		return 1;
 	}
 
+	ohmd_device* controller1 = ohmd_list_open_device_s(ctx, 2, settings);
+	if(!controller1){
+		printf("failed to open device: %s\n", ohmd_ctx_get_error(ctx));
+		return 1;
+	}
 
 	gl_ctx gl;
 	init_gl(&gl, hmd_w, hmd_h);

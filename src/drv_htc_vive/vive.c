@@ -794,8 +794,6 @@ static int open_controller(vive_priv* priv, int idx, uint32_t i)
 		LOGE("Could not get watchman firmware version!");
 	}
 
-	//vive_read_config_controller(priv);
-
 	if (vive_read_config(priv) != 0)
 	{
 		LOGE("Could not get watchman config!");
