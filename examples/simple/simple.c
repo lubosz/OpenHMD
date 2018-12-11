@@ -116,33 +116,12 @@ int main(int argc, char** argv)
 
 	ohmd_device_geti(hmd, OHMD_CONTROLS_HINTS, controls_fn);
 	ohmd_device_geti(hmd, OHMD_CONTROLS_TYPES, controls_types);
-	
-	for (int i = 0; i < control_count; i++)
-	{
-		printf("Control #%d: %s (%s)\n", i,
-		       ohmd_control_hint_to_str(controls_fn[i]),
-		       ohmd_control_type_to_str(controls_types[i]));
-	}
 
 	printf("%-25s", "controls:");
 	for(int i = 0; i < control_count; i++){
-		const char *control_str = ohmd_control_hint_to_str(controls_fn[i]);
-		const char *control_type_str = ohmd_control_type_to_str(controls_types[i]);
-		const char *foo;
-		if (i == control_count - 1)
-			foo = "";
-		else
-			foo = ", ";
-
-		printf("%s", control_str);
-		printf(" (%s)", control_type_str);
-		printf("%s", foo);
-
-		/*
-		printf("%s (%s)%s", control_str,
-		                    control_type_str,
-		                    foo);
-		*/
+		printf("%s (%s)%s", ohmd_control_hint_to_str(controls_fn[i]),
+		                    ohmd_control_type_to_str(controls_types[i]),
+		                    i == control_count - 1 ? "" : ", ");
 	}
 
 	printf("\n\n");
@@ -168,11 +147,12 @@ int main(int argc, char** argv)
 			float control_state[256];
 			ohmd_device_getf(hmd, OHMD_CONTROLS_STATE, control_state);
 
-			printf("%-25s", "controls state:");
+			printf("%-16s", "controls state:");
 			for(int i = 0; i < control_count; i++)
 			{
 				printf("%f ", control_state[i]);
 			}
+			printf("\n");
 		}
 		//puts("");
 			
