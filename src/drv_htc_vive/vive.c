@@ -71,7 +71,10 @@ typedef struct {
 	filter_queue gyro_q;
 
 	// controller only
+
+	// TODO: Don't need this
 	uint32_t last_controller_ticks2;
+
 	vive_controller_state state;
 	uint8_t charge_percent;
 	bool charging;
@@ -199,8 +202,10 @@ static void handle_imu_packet(vive_priv* priv, unsigned char *buffer, int size)
 	}
 }
 
-static void read_headset_reports(vive_priv* priv)
+static void update_headset(ohmd_device* device)
 {
+	vive_priv* priv = (vive_priv*)device;
+
 	int size = 0;
 
 	unsigned char buffer[FEATURE_BUFFER_SIZE];
@@ -224,20 +229,7 @@ static void controller_handle_battery(vive_priv* priv, uint8_t battery)
 	priv->charging = battery & VIVE_CONTROLLER_BATTERY_CHARGING;
 }
 
-typedef struct  {
-	uint32_t bit;
-	uint8_t code;
-} button_map;
-
-static const button_map controller_button_map[6] = {
-	{ VIVE_CONTROLLER_BUTTON_MENU, OHMD_MENU },
-	{ VIVE_CONTROLLER_BUTTON_GRIP, OHMD_SQUEEZE },
-	{ VIVE_CONTROLLER_BUTTON_SYSTEM, OHMD_HOME },
-	{ VIVE_CONTROLLER_BUTTON_THUMB, OHMD_ANALOG_PRESS },
-	{ VIVE_CONTROLLER_BUTTON_TOUCH, OHMD_TOUCHPAD_TOUCH },
-	{ VIVE_CONTROLLER_BUTTON_TRIGGER, OHMD_TRIGGER_CLICK },
-};
-
+#if 0
 const char* vive_button_to_string(int button)
 {
 	switch (button)
@@ -258,13 +250,11 @@ const char* vive_button_to_string(int button)
 		return "VIVE_UNKNOWN_BUTTON";
 	}
 }
+#endif
 
 static void controller_handle_buttons(vive_priv* priv, uint8_t buttons)
 {
-	if (buttons != priv->state.digital) {
-		// handle_buttons(buttons, priv->state.digital, 6, controller_button_map);
-		priv->state.digital = buttons;
-	}
+	priv->state.digital = buttons;
 }
 
 static void controller_handle_touch_position(vive_priv* priv, uint8_t *buf)
@@ -397,27 +387,23 @@ static void decode_controller_message(vive_priv* priv,
 		LOGE("overshoot: %ld\n", buf - end);
 	if (buf >= end)
 		return;
-
 }
 
-static void read_controller_reports(vive_priv* priv)
+static void update_controller(ohmd_device* device)
 {
+	vive_priv* priv = (vive_priv*)device;
 	int size = 0;
 
 	unsigned char buffer[FEATURE_BUFFER_SIZE];
 
 	while((size = hid_read(priv->imu_handle, buffer, FEATURE_BUFFER_SIZE)) > 0) {
-		if(buffer[0] == VIVE_HMD_IMU_PACKET_ID){
-			printf("got VIVE_HMD_IMU_PACKET_ID\n");
-			//handle_imu_packet(priv, buffer, size);
-		} else if (buffer[0] == VIVE_CONTROLLER_PACKET1_ID) {
+		if (buffer[0] == VIVE_CONTROLLER_PACKET1_ID) {
 			vive_controller_packet1 *pkt = (vive_controller_packet1 *) buffer;
 			decode_controller_message(priv, &pkt->message);
-
 		} else if (buffer[0] == VIVE_CONTROLLER_PACKET2_ID) {
-			//LOGI("Got controller packet 2.");
+			LOGW("Unhandled controller packet 2.");
 		} else if (buffer[0] == VIVE_CONTROLLER_DISCONNECT_PACKET_ID) {
-			LOGI("Got controller disconnected.");
+			LOGI("Controller disconnected.");
 		}else{
 			LOGE("unknown message type: %u", buffer[0]);
 		}
@@ -425,42 +411,6 @@ static void read_controller_reports(vive_priv* priv)
 
 	if(size < 0){
 		LOGE("error reading from device");
-	}
-}
-
-static void update_device(ohmd_device* device)
-{
-	vive_priv* priv = (vive_priv*)device;
-
-	switch (priv->type)
-	{
-	case VIVE_HEADSET:
-		read_headset_reports (priv);
-		break;
-	case VIVE_CONTROLLER_0:
-		case VIVE_CONTROLLER_1:
-		read_controller_reports(priv);
-		break;
-	}
-}
-
-void handle_buttons(uint32_t buttons, uint32_t last_buttons,
-                    uint8_t map_length, const button_map *map)
-{
-	int num_buttons = 0;
-	int i;
-
-	for (i = 0; i < map_length; i++) {
-		uint32_t bit = map[i].bit;
-
-		if ((buttons ^ last_buttons) & bit) {
-			if (buttons & bit) {
-				printf("Pressed  %s\n", vive_button_to_string(bit));
-			} else {
-				printf("Released %s\n", vive_button_to_string(bit));
-			}
-			num_buttons++;
-		}
 	}
 }
 
@@ -484,12 +434,12 @@ static int getf(ohmd_device* device, ohmd_float_value type, float* out)
 
 	case OHMD_CONTROLS_STATE:
 		if (priv->type != VIVE_HEADSET) {
-			out[0] = priv->state.digital & VIVE_CONTROLLER_BUTTON_MENU ? 1.0 : 0.0;
-			out[1] = priv->state.digital & VIVE_CONTROLLER_BUTTON_GRIP ? 1.0 : 0.0;
-			out[2] = priv->state.digital & VIVE_CONTROLLER_BUTTON_SYSTEM ? 1.0 : 0.0;
-			out[3] = priv->state.digital & VIVE_CONTROLLER_BUTTON_THUMB ? 1.0 : 0.0;
-			out[4] = priv->state.digital & VIVE_CONTROLLER_BUTTON_TOUCH ? 1.0 : 0.0;
-			out[5] = priv->state.digital & VIVE_CONTROLLER_BUTTON_TRIGGER ? 1.0 : 0.0;
+			out[0] = priv->state.digital & VIVE_CONTROLLER_BUTTON_MENU ? 1.337 : 0.1337;
+			out[1] = priv->state.digital & VIVE_CONTROLLER_BUTTON_GRIP ? 1.337 : 0.1337;
+			out[2] = priv->state.digital & VIVE_CONTROLLER_BUTTON_SYSTEM ? 1.337 : 0.1337;
+			out[3] = priv->state.digital & VIVE_CONTROLLER_BUTTON_THUMB ? 1.337 : 0.1337;
+			out[4] = priv->state.digital & VIVE_CONTROLLER_BUTTON_TOUCH ? 1.337 : 0.1337;
+			out[5] = priv->state.digital & VIVE_CONTROLLER_BUTTON_TRIGGER ? 1.337 : 0.1337;
 			out[6] = priv->state.touch_position.x;
 			out[7] = priv->state.touch_position.y;
 			out[8] = priv->state.analog_trigger;
@@ -505,46 +455,48 @@ static int getf(ohmd_device* device, ohmd_float_value type, float* out)
 	return 0;
 }
 
-static void close_device(ohmd_device* device)
+static void close_headset(ohmd_device* device)
 {
 	int hret = 0;
 	vive_priv* priv = (vive_priv*)device;
 
-	LOGD("Closing HTC Vive device");
+	LOGD("Closing HTC Vive headset");
 
-	switch (priv->type)
-	{
-		case VIVE_HEADSET:
-			// turn the display off
-			switch (priv->revision) {
-				case REV_VIVE:
-					hret = hid_send_feature_report(priv->hmd_handle,
-							                           vive_magic_power_off1,
-							                           sizeof(vive_magic_power_off1));
-					LOGI("power off magic 1: %d\n", hret);
+	// turn the display off
+	switch (priv->revision) {
+		case REV_VIVE:
+			hret = hid_send_feature_report(priv->hmd_handle,
+					                           vive_magic_power_off1,
+					                           sizeof(vive_magic_power_off1));
+			LOGI("power off magic 1: %d\n", hret);
 
-					hret = hid_send_feature_report(priv->hmd_handle,
-							                           vive_magic_power_off2,
-							                           sizeof(vive_magic_power_off2));
-					LOGI("power off magic 2: %d\n", hret);
-					break;
-				case REV_VIVE_PRO:
-					hret = hid_send_feature_report(priv->hmd_handle,
-							                           vive_pro_magic_power_off,
-							                           sizeof(vive_pro_magic_power_off));
-					LOGI("vive pro power off magic: %d\n", hret);
-					break;
-				default:
-					LOGE("Unknown VIVE revision.\n");
-			}
-			hid_close(priv->hmd_handle);
+			hret = hid_send_feature_report(priv->hmd_handle,
+					                           vive_magic_power_off2,
+					                           sizeof(vive_magic_power_off2));
+			LOGI("power off magic 2: %d\n", hret);
 			break;
-		case VIVE_CONTROLLER_0:
-		case VIVE_CONTROLLER_1:
-			controller_poweroff(priv->imu_handle);
+		case REV_VIVE_PRO:
+			hret = hid_send_feature_report(priv->hmd_handle,
+					                           vive_pro_magic_power_off,
+					                           sizeof(vive_pro_magic_power_off));
+			LOGI("vive pro power off magic: %d\n", hret);
 			break;
+		default:
+			LOGE("Unknown VIVE revision.\n");
 	}
 
+	hid_close(priv->hmd_handle);
+	hid_close(priv->imu_handle);
+
+	free(device);
+}
+
+static void close_controller(ohmd_device* device)
+{
+	vive_priv* priv = (vive_priv*)device;
+
+	LOGD("Closing HTC Vive controller");
+	controller_poweroff(priv->imu_handle);
 	hid_close(priv->imu_handle);
 
 	free(device);
@@ -791,8 +743,6 @@ static int open_controller(vive_priv* priv, int idx, uint32_t i)
 	if (vive_get_range_packet(priv) != 0)
 		LOGW("Could not get watchman IMU range packet!");
 
-	printf("Setting up device props 👍👍👍👍\n");
-
 	priv->base.properties.control_count = 9;
 	priv->base.properties.controls_hints[0] = OHMD_MENU;
 	priv->base.properties.controls_hints[1] = OHMD_SQUEEZE;
@@ -997,8 +947,16 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 	ohmd_set_default_device_properties(&priv->base.properties);
 
 	// set up device callbacks
-	priv->base.update = update_device;
-	priv->base.close = close_device;
+	if (priv->type == VIVE_HEADSET)
+	{
+		priv->base.update = update_headset;
+		priv->base.close = close_headset;
+	}
+	else
+	{
+		priv->base.update = update_controller;
+		priv->base.close = close_controller;
+	}
 	priv->base.getf = getf;
 
 	ofusion_init(&priv->sensor_fusion);
