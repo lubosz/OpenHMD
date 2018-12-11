@@ -385,6 +385,11 @@ static void controller_handle_imu_sample(vive_priv* priv, uint8_t *buf)
 
 	vec3f mag = {{0.0f, 0.0f, 0.0f}};
 
+	accel_vec.y *= -1;
+	accel_vec.z *= -1;
+	gyro_vec.y *= -1;
+	gyro_vec.z *= -1;
+
 	ofusion_update(&priv->sensor_fusion, dt,
 	               &gyro_vec, &accel_vec, &mag);
 }
