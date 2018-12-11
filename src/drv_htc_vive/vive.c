@@ -401,7 +401,9 @@ static void update_controller(ohmd_device* device)
 			vive_controller_packet1 *pkt = (vive_controller_packet1 *) buffer;
 			decode_controller_message(priv, &pkt->message);
 		} else if (buffer[0] == VIVE_CONTROLLER_PACKET2_ID) {
-			LOGW("Unhandled controller packet 2.");
+			vive_controller_packet2 *pkt = (vive_controller_packet2 *) buffer;
+			decode_controller_message(priv, &pkt->message[0]);
+			decode_controller_message(priv, &pkt->message[1]);
 		} else if (buffer[0] == VIVE_CONTROLLER_DISCONNECT_PACKET_ID) {
 			LOGI("Controller disconnected.");
 		}else{
@@ -409,8 +411,8 @@ static void update_controller(ohmd_device* device)
 		}
 	}
 
-	if(size < 0){
-		LOGE("error reading from device");
+	if (size < 0) {
+		LOGE("Error reading from controller: %d", size);
 	}
 }
 
