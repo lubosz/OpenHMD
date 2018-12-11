@@ -10,8 +10,17 @@
 #include <openhmd.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <signal.h>
+#include <stdbool.h>
+
+static volatile bool should_quit = false;
 
 void ohmd_sleep(double);
+
+void sig_handler(int signo) {
+	if (signo == SIGINT)
+		should_quit = true;
+}
 
 // gets float values from the device and prints them
 void print_infof(ohmd_device* hmd, const char* name, int len, ohmd_float_value val)
@@ -129,7 +138,11 @@ int main(int argc, char** argv)
 	int device_class = 0;
 	ohmd_list_geti(ctx, device_idx, OHMD_DEVICE_CLASS, &device_class);
 	// Ask for n rotation quaternions and position vectors
-	for(int i = 0; i < 10000; i++){
+
+	if (signal(SIGINT, sig_handler) == SIG_ERR)
+		printf("Could not register SIGINT callback.\n");
+
+	for(int i = 0; i < 10000 && !should_quit; i++){
 		ohmd_ctx_update(ctx);
 
 		// this can be used to set a different zero point
@@ -155,7 +168,7 @@ int main(int argc, char** argv)
 			printf("\n");
 		}
 		//puts("");
-			
+
 		ohmd_sleep(.01);
 	}
 
