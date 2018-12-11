@@ -627,11 +627,9 @@ int vive_read_config(vive_priv* priv)
 	};
 
 	int bytes;
-
 	LOGI("Getting vive_config_start_packet...");
-	bytes = hid_get_feature_report(priv->imu_handle,
-	                               (unsigned char*) &start_packet,
-	                               sizeof(start_packet));
+	bytes = hid_get_feature_report_tryout(priv->imu_handle, &start_packet,
+	                                      sizeof(start_packet), 100);
 
 	if (bytes < 0)
 	{
@@ -639,7 +637,7 @@ int vive_read_config(vive_priv* priv)
 		return bytes;
 	}
 
-	LOGI("Config packet size is %i bytes.", bytes);
+	LOGI("Config start packet size is %i bytes.", bytes);
 
 	vive_config_read_packet read_packet = {
 		.id = VIVE_CONFIG_READ_PACKET_ID,
@@ -649,9 +647,8 @@ int vive_read_config(vive_priv* priv)
 
 	int offset = 0;
 	do {
-		bytes = hid_get_feature_report(priv->imu_handle,
-		                               (unsigned char*) &read_packet,
-		                               sizeof(read_packet));
+		bytes = hid_get_feature_report_tryout(priv->imu_handle, &read_packet,
+		                                      sizeof(read_packet), 100);
 
 		memcpy((uint8_t*)packet_buffer + offset,
 		       &read_packet.payload,
