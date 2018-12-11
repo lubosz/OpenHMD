@@ -111,21 +111,38 @@ int main(int argc, char** argv)
 	int control_count;
 	ohmd_device_geti(hmd, OHMD_CONTROL_COUNT, &control_count);
 
-	const char* controls_fn_str[] = { "generic", "trigger", "trigger_click", "squeeze", "menu", "home",
-		"analog-x", "analog-y", "anlog_press", "button-a", "button-b", "button-x", "button-y",
-		"volume-up", "volume-down", "mic-mute"};
-
-	const char* controls_type_str[] = {"digital", "analog"};
-
 	int controls_fn[64];
 	int controls_types[64];
 
 	ohmd_device_geti(hmd, OHMD_CONTROLS_HINTS, controls_fn);
 	ohmd_device_geti(hmd, OHMD_CONTROLS_TYPES, controls_types);
 	
+	for (int i = 0; i < control_count; i++)
+	{
+		printf("Control #%d: %s (%s)\n", i,
+		       ohmd_control_hint_to_str(controls_fn[i]),
+		       ohmd_control_type_to_str(controls_types[i]));
+	}
+
 	printf("%-25s", "controls:");
 	for(int i = 0; i < control_count; i++){
-		printf("%s (%s)%s", controls_fn_str[controls_fn[i]], controls_type_str[controls_types[i]], i == control_count - 1 ? "" : ", ");
+		const char *control_str = ohmd_control_hint_to_str(controls_fn[i]);
+		const char *control_type_str = ohmd_control_type_to_str(controls_types[i]);
+		const char *foo;
+		if (i == control_count - 1)
+			foo = "";
+		else
+			foo = ", ";
+
+		printf("%s", control_str);
+		printf(" (%s)", control_type_str);
+		printf("%s", foo);
+
+		/*
+		printf("%s (%s)%s", control_str,
+		                    control_type_str,
+		                    foo);
+		*/
 	}
 
 	printf("\n\n");
