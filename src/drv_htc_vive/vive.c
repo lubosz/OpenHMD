@@ -73,9 +73,10 @@ typedef struct {
 	// controller only
 	uint32_t last_controller_ticks2;
 	vive_controller_state state;
+	uint8_t charge_percent;
+	bool charging;
+
 } vive_priv;
-
-
 
 void vec3f_from_vive_vec_accel(const vive_imu_config* config,
                                const int16_t* smp,
@@ -215,26 +216,18 @@ static void read_headset_reports(vive_priv* priv)
 	if(size < 0){
 		LOGE("error reading from device");
 	}
-
 }
 
 static void controller_handle_battery(vive_priv* priv, uint8_t battery)
 {
-	uint8_t charge_percent = battery & VIVE_CONTROLLER_BATTERY_CHARGE_MASK;
-	bool charging = battery & VIVE_CONTROLLER_BATTERY_CHARGING;
-
-	//if (battery != self->battery)
-	//	self->battery = battery;
-
-	(void)charge_percent;
-	(void)charging;
+	priv->charge_percent = battery & VIVE_CONTROLLER_BATTERY_CHARGE_MASK;
+	priv->charging = battery & VIVE_CONTROLLER_BATTERY_CHARGING;
 }
 
 typedef struct  {
 	uint32_t bit;
 	uint8_t code;
 } button_map;
-
 
 static const button_map controller_button_map[6] = {
 	{ VIVE_CONTROLLER_BUTTON_MENU, OHMD_MENU },
@@ -266,10 +259,8 @@ const char* vive_button_to_string(int button)
 	}
 }
 
-#define BUTTON_PRESSED	0x80
-
-void handle_buttons(uint32_t buttons, uint32_t last_buttons, uint8_t map_length,
-                    const button_map *map)
+void handle_buttons(uint32_t buttons, uint32_t last_buttons,
+                    uint8_t map_length, const button_map *map)
 {
 	uint8_t btn_codes[map_length];
 	int num_buttons = 0;
@@ -474,7 +465,6 @@ static void update_device(ohmd_device* device)
 		read_controller_reports(priv);
 		break;
 	}
-
 }
 
 static int getf(ohmd_device* device, ohmd_float_value type, float* out)
@@ -782,19 +772,14 @@ static int open_controller(vive_priv* priv, int idx, uint32_t i)
 	}
 
 	if (vive_read_firmware(priv->imu_handle) != 0)
-	{
 		LOGE("Could not get watchman firmware version!");
-	}
 
 	if (vive_read_config(priv) != 0)
-	{
 		LOGE("Could not get watchman config!");
-	}
 
 	if (vive_get_range_packet(priv) != 0)
-	{
-		LOGW("Could not get controller imu range packet.\n");
-	}
+		LOGW("Could not get watchman IMU range packet!");
+
 	return 0;
 }
 
@@ -861,19 +846,13 @@ static int open_headset(vive_priv* priv, int idx)
 	switch (priv->revision) {
 		case REV_VIVE:
 			if (vive_read_config(priv) != 0)
-			{
 				LOGW("Could not read config. Using defaults.\n");
-			}
 
 			if (vive_get_range_packet(priv) != 0)
-			{
 				LOGW("Could not get range packet.\n");
-			}
 
 			if (vive_read_firmware(priv->imu_handle) != 0)
-			{
 				LOGE("Could not get headset firmware version!");
-			}
 
 			// turn the display on
 			hret = hid_send_feature_report(priv->hmd_handle,
@@ -935,8 +914,6 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 {
 	vive_priv* priv = ohmd_alloc(driver->ctx, sizeof(vive_priv));
 
-	printf("🥨 Opening device %d\n\n", desc->id);
-
 	if(!priv)
 		return NULL;
 
@@ -945,7 +922,6 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 	priv->type = desc->id;
 
 	int idx = atoi(desc->path);
-	printf("The path is %s\n", desc->path);
 
 	/* IMU config defaults */
 	priv->imu_config.acc_bias.x = 0;
@@ -1041,7 +1017,6 @@ static void get_device_list(ohmd_driver* driver, ohmd_device_list* list)
 		strcpy(desc->vendor, "HTC/Valve");
 		strcpy(desc->product, "HTC Vive: Controller 0");
 
-		//strcpy(desc->path, cur_dev->path);
 		snprintf(desc->path, OHMD_STR_SIZE, "%d", idx);
 
 		desc->device_flags = OHMD_DEVICE_FLAGS_ROTATIONAL_TRACKING;
@@ -1057,7 +1032,6 @@ static void get_device_list(ohmd_driver* driver, ohmd_device_list* list)
 		strcpy(desc->vendor, "HTC/Valve");
 		strcpy(desc->product, "HTC Vive: Controller 1");
 
-		// strcpy(desc->path, cur_dev->path);
 		snprintf(desc->path, OHMD_STR_SIZE, "%d", idx);
 
 		desc->device_flags = OHMD_DEVICE_FLAGS_ROTATIONAL_TRACKING;
