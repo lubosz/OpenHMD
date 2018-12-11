@@ -42,25 +42,25 @@ typedef enum {
 typedef struct {
 	ohmd_device base;
 
+	// headset only
 	hid_device* hmd_handle;
 	hid_device* imu_handle;
-	hid_device* controller_handle[2];
+	vive_revision revision;
+	vive_imu_config imu_config;
 	fusion sensor_fusion;
 	vec3f raw_accel, raw_gyro;
 	uint32_t last_ticks;
 	uint8_t last_seq;
 
-	uint32_t last_controller_ticks;
-	uint32_t last_controller_ticks2;
-
 	vec3f gyro_error;
 	filter_queue gyro_q;
 
-	vive_revision revision;
-
-	vive_imu_config imu_config;
+	// controller only
+	hid_device* controller_handle[2];
 	vive_imu_config controller_imu_config[2];
 	uint8_t buttons;
+	uint32_t last_controller_ticks;
+	uint32_t last_controller_ticks2;
 
 } vive_priv;
 
@@ -812,6 +812,8 @@ static int open_controller(vive_priv* priv, int idx, uint32_t i)
 static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 {
 	vive_priv* priv = ohmd_alloc(driver->ctx, sizeof(vive_priv));
+
+	printf("🥨 Opening device %d\n\n", desc->id);
 
 	if(!priv)
 		return NULL;
