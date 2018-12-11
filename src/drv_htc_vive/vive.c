@@ -781,13 +781,13 @@ static int open_controller(vive_priv* priv, int idx, uint32_t i)
 	                                   VIVE_WATCHMAN_DONGLE, i, 2, idx);
 
 	if(!priv->imu_handle) {
-    LOGE("Could not open watchman dongle %d!", i);
-    return -1;
+		LOGE("Could not open watchman dongle %d!", i);
+		return -1;
 	}
 
-  if(hid_set_nonblocking(priv->imu_handle, 1) == -1){
+	if(hid_set_nonblocking(priv->imu_handle, 1) == -1){
 		LOGE("Failed to set non-blocking on device");
-    return -1;
+		return -1;
 	}
 
 	if (vive_read_firmware(priv->imu_handle) != 0)
@@ -797,16 +797,16 @@ static int open_controller(vive_priv* priv, int idx, uint32_t i)
 
 	//vive_read_config_controller(priv);
 
-  if (vive_read_config(priv) != 0)
+	if (vive_read_config(priv) != 0)
 	{
 		LOGE("Could not get watchman config!");
 	}
 
-  if (vive_get_range_packet(priv) != 0)
+	if (vive_get_range_packet(priv) != 0)
 	{
 		LOGW("Could not get controller imu range packet.\n");
 	}
-  return 0;
+	return 0;
 }
 
 static int open_headset(vive_priv* priv, int idx)
