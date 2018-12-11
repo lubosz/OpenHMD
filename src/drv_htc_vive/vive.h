@@ -148,6 +148,4 @@ bool vive_decode_sensor_packet(vive_headset_imu_packet* pkt,
 bool vive_decode_config_packet(vive_imu_config* result,
                                const unsigned char* buffer,
                                uint16_t size);
-bool vive_decode_controller_packet1(vive_controller_packet1* pkt,
-                                    const unsigned char* buffer, int size);
 #endif
