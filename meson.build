@@ -23,7 +23,8 @@ endif
 dep_hidapi = dependency(hidapi)
 deps = [
 	meson.get_compiler('c').find_library('m', required : false), #-lm
-	dependency('threads') #pthread
+	dependency('threads'), #pthread
+	dependency('zlib')
 ]
 c_args = []
 

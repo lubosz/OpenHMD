@@ -11,8 +11,9 @@
 
 #include "vive.h"
 
-#include "../ext_deps/miniz.h"
+//#include "../ext_deps/miniz.h"
 #include "../ext_deps/nxjson.h"
+#include <zlib.h>
 
 #ifdef _MSC_VER
 #define inline __inline
@@ -102,15 +103,20 @@ void print_vec3f(const char* title, vec3f *vec)
 }
 
 bool vive_decode_config_packet(vive_imu_config* result,
-                               const unsigned char* buffer,
+                               const unsigned char* config_z,
                                uint16_t size)
 {
-	unsigned char output[32768];
+	z_stream strm;
+	unsigned char config_json[32768];
+/*
 	mz_ulong output_size = 32768;
+
+	printf("😄 Config size is %d\n\n", size);
 
 	int cmp_status = uncompress(output, &output_size, buffer, (mz_ulong)size);
 	if (cmp_status != Z_OK){
-		LOGE("invalid vive config, could not uncompress");
+		LOGE("invalid vive config, could not uncompress: %d", cmp_status);
+		printf("\n\n%s\n\n", buffer);
 		return false;
 	}
 
@@ -119,7 +125,35 @@ bool vive_decode_config_packet(vive_imu_config* result,
 
 	trim((char*)output, (char*)output, (unsigned int)output_size);
 
-	const nx_json* json = nx_json_parse((char*)output, 0);
+*/
+
+
+	strm.zalloc = Z_NULL;
+	strm.zfree = Z_NULL;
+	strm.opaque = Z_NULL;
+	strm.avail_in = 0;
+	strm.next_in = Z_NULL;
+	int ret = inflateInit(&strm);
+	if (ret != Z_OK) {
+		printf("inflate_init failed: %d\n", ret);
+		return NULL;
+	}
+
+	strm.avail_in = size;
+	strm.next_in = config_z;
+	strm.avail_out = 32768;
+	strm.next_out = config_json;
+
+	ret = inflate(&strm, Z_FINISH);
+
+	if (ret != Z_STREAM_END) {
+		printf("Failed to inflate configuration data: %d\n", ret);
+		return NULL;
+	}
+
+	printf("Config:\n%s\n", (char*)config_json);
+
+	const nx_json* json = nx_json_parse((char*)config_json, 0);
 
 	if (json) {
 		get_vec3f_from_json(json, "acc_bias", &result->acc_bias);

@@ -617,6 +617,7 @@ int hid_get_feature_report_tryout(hid_device *device,
 		ret = hid_get_feature_report(device, (unsigned char*) data, length);
 		try++;
 	}
+	printf("Took %d tries\n", try);
 	return ret;
 }
 
@@ -650,15 +651,22 @@ int vive_read_config(vive_priv* priv)
 		bytes = hid_get_feature_report_tryout(priv->imu_handle, &read_packet,
 		                                      sizeof(read_packet), 100);
 
+		printf("Got config packet with length %d\n", read_packet.length);
+		for (int i = 0; i < read_packet.length; i++)
+			printf("%x", read_packet.payload[i]);
+		printf("\n");
 		memcpy((uint8_t*)packet_buffer + offset,
 		       &read_packet.payload,
 		       read_packet.length);
 		offset += read_packet.length;
 	} while (read_packet.length);
 	packet_buffer[offset] = '\0';
-	vive_decode_config_packet(&priv->imu_config, packet_buffer, offset);
+	bool r = vive_decode_config_packet(&priv->imu_config, packet_buffer, offset);
 
 	free(packet_buffer);
+
+	if (!r)
+		return -1;
 
 	return 0;
 }
@@ -739,19 +747,22 @@ static int open_controller(vive_priv* priv, int idx, uint32_t i)
 		return -1;
 	}
 
+	if (vive_read_firmware(priv->imu_handle) != 0)
+		LOGE("Could not get watchman firmware version!");
+
+
+	if (vive_get_range_packet(priv) != 0)
+		LOGW("Could not get watchman IMU range packet!");
+
+	if (vive_read_config(priv) != 0) {
+		LOGE("Could not get watchman config!");
+		return -1;
+	}
+
 	if(hid_set_nonblocking(priv->imu_handle, 1) == -1){
 		LOGE("Failed to set non-blocking on device");
 		return -1;
 	}
-
-	if (vive_read_firmware(priv->imu_handle) != 0)
-		LOGE("Could not get watchman firmware version!");
-
-	if (vive_read_config(priv) != 0)
-		LOGE("Could not get watchman config!");
-
-	if (vive_get_range_packet(priv) != 0)
-		LOGW("Could not get watchman IMU range packet!");
 
 	priv->base.properties.control_count = 9;
 	priv->base.properties.controls_hints[0] = OHMD_MENU;
