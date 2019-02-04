@@ -29,6 +29,8 @@
 #include <limits.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <asm/byteorder.h>
+#include <inttypes.h>
 
 #include "vive.h"
 
@@ -37,22 +39,45 @@ typedef enum {
 	REV_VIVE_PRO
 } vive_revision;
 
+typedef enum
+{
+	VIVE_HEADSET      = 1,
+	VIVE_CONTROLLER_0 = 2,
+	VIVE_CONTROLLER_1 = 3
+} vive_device_type;
+
+typedef struct {
+	vec2i touch_position;
+	float analog_trigger;
+	uint8_t digital;
+} vive_controller_state;
+
 typedef struct {
 	ohmd_device base;
 
-	hid_device* hmd_handle;
 	hid_device* imu_handle;
+	vive_device_type type;
+	vive_imu_config imu_config;
 	fusion sensor_fusion;
-	vec3f raw_accel, raw_gyro;
 	uint32_t last_ticks;
+
+	// headset only
+	hid_device* hmd_handle;
+	vive_revision revision;
+	vec3f raw_accel, raw_gyro;
 	uint8_t last_seq;
 
 	vec3f gyro_error;
 	filter_queue gyro_q;
 
-	vive_revision revision;
+	// controller only
 
-	vive_imu_config imu_config;
+	// TODO: Don't need this
+	uint32_t last_controller_ticks2;
+
+	vive_controller_state state;
+	uint8_t charge_percent;
+	bool charging;
 
 } vive_priv;
 
@@ -177,7 +202,7 @@ static void handle_imu_packet(vive_priv* priv, unsigned char *buffer, int size)
 	}
 }
 
-static void update_device(ohmd_device* device)
+static void update_headset(ohmd_device* device)
 {
 	vive_priv* priv = (vive_priv*)device;
 
@@ -198,7 +223,177 @@ static void update_device(ohmd_device* device)
 	}
 }
 
-static int getf(ohmd_device* device, ohmd_float_value type, float* out)
+static void controller_handle_battery(vive_priv* priv, uint8_t battery)
+{
+	priv->charge_percent = battery & VIVE_CONTROLLER_BATTERY_CHARGE_MASK;
+	priv->charging = battery & VIVE_CONTROLLER_BATTERY_CHARGING;
+}
+
+static void controller_handle_buttons(vive_priv* priv, uint8_t buttons)
+{
+	priv->state.digital = buttons;
+}
+
+static void controller_handle_touch_position(vive_priv* priv, uint8_t *buf)
+{
+	priv->state.touch_position.x = __le16_to_cpup((__le16 *)buf);
+	priv->state.touch_position.y = __le16_to_cpup((__le16 *)(buf + 2));
+}
+
+static void controller_handle_analog_trigger(vive_priv* priv, uint8_t analog)
+{
+	priv->state.analog_trigger = analog;
+}
+
+static int controller_haptic_pulse(hid_device* device)
+{
+	const vive_controller_haptic_pulse_report report = {
+		.id = VIVE_CONTROLLER_COMMAND_PACKET_ID,
+		.command = VIVE_CONTROLLER_HAPTIC_PULSE_COMMAND,
+		.len = 7,
+		.unknown = { 0x00, 0xf4, 0x01, 0xb5, 0xa2, 0x01, 0x00 },
+	};
+
+	return hid_send_feature_report(device,
+	                               (unsigned char*) &report,
+	                               sizeof(report));
+}
+
+static int controller_poweroff(hid_device* device)
+{
+	const vive_controller_poweroff_report report = {
+		.id = VIVE_CONTROLLER_COMMAND_PACKET_ID,
+		.command = VIVE_CONTROLLER_POWEROFF_COMMAND,
+		.len = 4,
+		.magic = { 'o', 'f', 'f', '!' },
+	};
+
+	return hid_send_feature_report(device,
+	                               (unsigned char*) &report,
+	                               sizeof(report));
+}
+
+static void controller_handle_imu_sample(vive_priv* priv, uint8_t *buf)
+{
+	/* Time in 48 MHz ticks, but we are missing the low byte */
+	uint32_t timestamp = priv->last_ticks | *buf;
+
+	if(priv->last_controller_ticks2 == 0)
+		priv->last_controller_ticks2 = timestamp;
+
+	uint32_t t1, t2;
+	t1 = timestamp;
+	t2 = priv->last_controller_ticks2;
+
+	float dt = (t1 - t2) / VIVE_CLOCK_FREQ;
+
+	priv->last_controller_ticks2 = timestamp;
+
+	int16_t accel[3] = {
+		__le16_to_cpup((__le16 *)(buf + 1)),
+		__le16_to_cpup((__le16 *)(buf + 3)),
+		__le16_to_cpup((__le16 *)(buf + 5)),
+	};
+
+	vec3f accel_vec;
+	vec3f_from_vive_vec_accel(&priv->imu_config, accel, &accel_vec);
+	accel_vec.y *= -1;
+	accel_vec.z *= -1;
+
+	int16_t gyro[3] = {
+		__le16_to_cpup((__le16 *)(buf + 7)),
+		__le16_to_cpup((__le16 *)(buf + 9)),
+		__le16_to_cpup((__le16 *)(buf + 11)),
+	};
+
+	vec3f gyro_vec;
+	vec3f_from_vive_vec_gyro(&priv->imu_config, gyro, &gyro_vec);
+	gyro_vec.y *= -1;
+	gyro_vec.z *= -1;
+
+	vec3f mag = {{0.0f, 0.0f, 0.0f}};
+	ofusion_update(&priv->sensor_fusion, dt,
+	               &gyro_vec, &accel_vec, &mag);
+}
+
+/*
+ * Decodes multiplexed Wireless Receiver messages.
+ */
+static void decode_controller_message(vive_priv* priv,
+                                      vive_controller_message *message)
+{
+	unsigned char *buf = message->payload;
+	unsigned char *end = message->payload + message->len - 1;
+
+	priv->last_ticks = (message->timestamp_hi << 24) |
+	                   (message->timestamp_lo << 16);
+
+	/*
+	 * Handle button, touch, and IMU events. The first byte of each event
+	 * has the three most significant bits set.
+	 */
+	while ((buf < end) && ((*buf >> 5) == 7)) {
+		uint8_t type = *buf++;
+
+		if (type & 0x10) {
+			if (type & 1) {
+				controller_handle_buttons(priv, *buf++);
+			}
+			if (type & 2) {
+				controller_handle_touch_position(priv, buf);
+				buf += 4;
+			}
+			if (type & 4) {
+				controller_handle_analog_trigger(priv, *buf++);
+			}
+		} else {
+			if (type & 1)
+				controller_handle_battery(priv, *buf++);
+			if (type & 2) {
+				/* unknown, does ever happen? */
+				buf++;
+			}
+		}
+		if (type & 8) {
+			controller_handle_imu_sample(priv, buf);
+			buf += 13;
+		}
+	}
+
+	if (buf > end)
+		LOGE("overshoot: %ld\n", buf - end);
+	if (buf >= end)
+		return;
+}
+
+static void update_controller(ohmd_device* device)
+{
+	vive_priv* priv = (vive_priv*)device;
+	int size = 0;
+
+	unsigned char buffer[FEATURE_BUFFER_SIZE];
+
+	while((size = hid_read(priv->imu_handle, buffer, FEATURE_BUFFER_SIZE)) > 0) {
+		if (buffer[0] == VIVE_CONTROLLER_PACKET1_ID) {
+			vive_controller_packet1 *pkt = (vive_controller_packet1 *) buffer;
+			decode_controller_message(priv, &pkt->message);
+		} else if (buffer[0] == VIVE_CONTROLLER_PACKET2_ID) {
+			vive_controller_packet2 *pkt = (vive_controller_packet2 *) buffer;
+			decode_controller_message(priv, &pkt->message[0]);
+			decode_controller_message(priv, &pkt->message[1]);
+		} else if (buffer[0] == VIVE_CONTROLLER_DISCONNECT_PACKET_ID) {
+			LOGI("Controller disconnected.");
+		}else{
+			LOGE("Unknown controller message type: %u", buffer[0]);
+		}
+	}
+
+	if (size < 0) {
+		LOGE("Error reading from controller: %d", size);
+	}
+}
+
+static int getf_headset(ohmd_device* device, ohmd_float_value type, float* out)
 {
 	vive_priv* priv = (vive_priv*)device;
 
@@ -225,12 +420,47 @@ static int getf(ohmd_device* device, ohmd_float_value type, float* out)
 	return 0;
 }
 
-static void close_device(ohmd_device* device)
+static int getf_controller(ohmd_device* device, ohmd_float_value type, float* out)
+{
+	vive_priv* priv = (vive_priv*) device;
+
+	switch(type){
+	case OHMD_ROTATION_QUAT:
+		*(quatf*)out = priv->sensor_fusion.orient;
+		break;
+
+	case OHMD_POSITION_VECTOR:
+		out[0] = out[1] = out[2] = 0;
+		break;
+
+	case OHMD_CONTROLS_STATE:
+		out[0] = priv->state.digital & VIVE_CONTROLLER_BUTTON_MENU ? 1.337 : 0.1337;
+		out[1] = priv->state.digital & VIVE_CONTROLLER_BUTTON_GRIP ? 1.337 : 0.1337;
+		out[2] = priv->state.digital & VIVE_CONTROLLER_BUTTON_SYSTEM ? 1.337 : 0.1337;
+		out[3] = priv->state.digital & VIVE_CONTROLLER_BUTTON_THUMB ? 1.337 : 0.1337;
+		out[4] = priv->state.digital & VIVE_CONTROLLER_BUTTON_TOUCH ? 1.337 : 0.1337;
+		out[5] = priv->state.digital & VIVE_CONTROLLER_BUTTON_TRIGGER ? 1.337 : 0.1337;
+		out[6] = priv->state.touch_position.x;
+		out[7] = priv->state.touch_position.y;
+		out[8] = priv->state.analog_trigger;
+
+		break;
+
+	default:
+		ohmd_set_error(priv->base.ctx, "invalid type given to getf (%ud)", type);
+		return -1;
+		break;
+	}
+
+	return 0;
+}
+
+static void close_headset(ohmd_device* device)
 {
 	int hret = 0;
 	vive_priv* priv = (vive_priv*)device;
 
-	LOGD("closing HTC Vive device");
+	LOGD("Closing HTC Vive headset");
 
 	// turn the display off
 	switch (priv->revision) {
@@ -256,6 +486,17 @@ static void close_device(ohmd_device* device)
 	}
 
 	hid_close(priv->hmd_handle);
+	hid_close(priv->imu_handle);
+
+	free(device);
+}
+
+static void close_controller(ohmd_device* device)
+{
+	vive_priv* priv = (vive_priv*)device;
+
+	LOGD("Closing HTC Vive controller");
+	controller_poweroff(priv->imu_handle);
 	hid_close(priv->imu_handle);
 
 	free(device);
@@ -381,8 +622,7 @@ int vive_read_config(vive_priv* priv)
 
 	if (bytes < 0)
 	{
-		LOGE("Could not get vive_config_start_packet: %ls (%d)",
-		     hid_error(priv->imu_handle), bytes);
+		LOGE("Could not get vive_config_start_packet: %d", bytes);
 		return bytes;
 	}
 
@@ -478,23 +718,58 @@ int vive_get_range_packet(vive_priv* priv)
 	return 0;
 }
 
-static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
+static int open_controller(vive_priv* priv, int idx, uint32_t i)
 {
-	vive_priv* priv = ohmd_alloc(driver->ctx, sizeof(vive_priv));
+	printf("Opening controller!\n");
+	priv->imu_handle = open_device_idx(VALVE_ID,
+	                                   VIVE_WATCHMAN_DONGLE, i, 2, idx);
 
-	if(!priv)
-		return NULL;
+	if(!priv->imu_handle) {
+		LOGE("Could not open watchman dongle %d!", i);
+		return -1;
+	}
 
-	int hret = 0;
+	if(hid_set_nonblocking(priv->imu_handle, 1) == -1){
+		LOGE("Failed to set non-blocking on device");
+		return -1;
+	}
 
-	priv->revision = desc->revision;
+	if (vive_read_firmware(priv->imu_handle) != 0)
+		LOGE("Could not get watchman firmware version!");
 
-	priv->base.ctx = driver->ctx;
+	if (vive_read_config(priv) != 0)
+		LOGE("Could not get watchman config!");
 
-	int idx = atoi(desc->path);
+	if (vive_get_range_packet(priv) != 0)
+		LOGW("Could not get watchman IMU range packet!");
+
+	priv->base.properties.control_count = 9;
+	priv->base.properties.controls_hints[0] = OHMD_MENU;
+	priv->base.properties.controls_hints[1] = OHMD_SQUEEZE;
+	priv->base.properties.controls_hints[2] = OHMD_HOME;
+	priv->base.properties.controls_hints[3] = OHMD_ANALOG_PRESS;
+	priv->base.properties.controls_hints[4] = OHMD_TOUCHPAD_TOUCH;
+	priv->base.properties.controls_hints[5] = OHMD_TRIGGER_CLICK;
+
+	for (int i = 0; i < 6; i++)
+		priv->base.properties.controls_types[i] = OHMD_DIGITAL;
+
+	priv->base.properties.controls_hints[6] = OHMD_ANALOG_X;
+	priv->base.properties.controls_hints[7] = OHMD_ANALOG_Y;
+	priv->base.properties.controls_hints[8] = OHMD_TRIGGER;
+
+	for (int i = 6; i < 9; i++)
+		priv->base.properties.controls_types[i] = OHMD_ANALOG;
+
+	return 0;
+}
+
+static int open_headset(vive_priv* priv, int idx)
+{
+	int hret;
 
 	// Open the HMD device
-	switch (desc->revision) {
+	switch (priv->revision) {
 		case REV_VIVE:
 			priv->hmd_handle = open_device_idx(HTC_ID, VIVE_HMD, 0, 1, idx);
 			break;
@@ -503,17 +778,18 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 			break;
 		default:
 			LOGE("Unknown VIVE revision.\n");
+			return -1;
 	}
 
 	if(!priv->hmd_handle)
-		goto cleanup;
+		return -1;
 
 	if(hid_set_nonblocking(priv->hmd_handle, 1) == -1){
-		ohmd_set_error(driver->ctx, "failed to set non-blocking on device");
-		goto cleanup;
+		ohmd_set_error(priv->base.ctx, "failed to set non-blocking on device");
+		return -1;
 	}
 
-	switch (desc->revision) {
+	switch (priv->revision) {
 		case REV_VIVE:
 			priv->imu_handle = open_device_idx(VALVE_ID,
 			                                   VIVE_LIGHTHOUSE_FPGA_RX, 0, 2, idx);
@@ -523,14 +799,15 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 			break;
 		default:
 			LOGE("Unknown VIVE revision.\n");
+			return -1;
 	}
 
 	if(!priv->imu_handle)
-		goto cleanup;
+		return -1;
 
 	if(hid_set_nonblocking(priv->imu_handle, 1) == -1){
-		ohmd_set_error(driver->ctx, "failed to set non-blocking on device");
-		goto cleanup;
+		ohmd_set_error(priv->base.ctx, "failed to set non-blocking on device");
+		return -1;
 	}
 
 	dump_info_string(hid_get_manufacturer_string,
@@ -547,42 +824,16 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 	LOGD("enable lighthouse magic: %d\n", hret);
 #endif
 
-	/* IMU config defaults */
-	priv->imu_config.acc_bias.x = 0;
-	priv->imu_config.acc_bias.y = 0;
-	priv->imu_config.acc_bias.z = 0;
-
-	priv->imu_config.acc_scale.x = 1.0f;
-	priv->imu_config.acc_scale.y = 1.0f;
-	priv->imu_config.acc_scale.z = 1.0f;
-
-	priv->imu_config.gyro_bias.x = 0;
-	priv->imu_config.gyro_bias.y = 0;
-	priv->imu_config.gyro_bias.z = 0;
-
-	priv->imu_config.gyro_scale.x = 1.0f;
-	priv->imu_config.gyro_scale.y = 1.0f;
-	priv->imu_config.gyro_scale.z = 1.0f;
-
-	priv->imu_config.gyro_range = 8.726646f;
-	priv->imu_config.acc_range = 39.226600f;
-
-	switch (desc->revision) {
+	switch (priv->revision) {
 		case REV_VIVE:
 			if (vive_read_config(priv) != 0)
-			{
 				LOGW("Could not read config. Using defaults.\n");
-			}
 
 			if (vive_get_range_packet(priv) != 0)
-			{
 				LOGW("Could not get range packet.\n");
-			}
 
 			if (vive_read_firmware(priv->imu_handle) != 0)
-			{
 				LOGE("Could not get headset firmware version!");
-			}
 
 			// turn the display on
 			hret = hid_send_feature_report(priv->hmd_handle,
@@ -612,7 +863,7 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 	ohmd_set_default_device_properties(&priv->base.properties);
 
 	// Set device properties TODO: Get from device
-	switch (desc->revision) {
+	switch (priv->revision) {
 		case REV_VIVE:
 			priv->base.properties.hres = 2160;
 			priv->base.properties.vres = 1200;
@@ -637,10 +888,96 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 	// calculate projection eye projection matrices from the device properties
 	ohmd_calc_default_proj_matrices(&priv->base.properties);
 
+	return 0;
+}
+
+static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
+{
+	vive_priv* priv = ohmd_alloc(driver->ctx, sizeof(vive_priv));
+
+	if(!priv)
+		return NULL;
+
+	priv->base.ctx = driver->ctx;
+	priv->revision = desc->revision;
+	priv->type = desc->id;
+
+	int idx = atoi(desc->path);
+
+	/* IMU config defaults */
+	priv->imu_config.acc_bias.x = 0;
+	priv->imu_config.acc_bias.y = 0;
+	priv->imu_config.acc_bias.z = 0;
+
+	priv->imu_config.acc_scale.x = 1.0f;
+	priv->imu_config.acc_scale.y = 1.0f;
+	priv->imu_config.acc_scale.z = 1.0f;
+
+	priv->imu_config.gyro_bias.x = 0;
+	priv->imu_config.gyro_bias.y = 0;
+	priv->imu_config.gyro_bias.z = 0;
+
+	priv->imu_config.gyro_scale.x = 1.0f;
+	priv->imu_config.gyro_scale.y = 1.0f;
+	priv->imu_config.gyro_scale.z = 1.0f;
+
+	priv->imu_config.gyro_range = 8.726646f;
+	priv->imu_config.acc_range = 39.226600f;
+
+	/* hack: controller defaults */
+	if (priv->type == VIVE_CONTROLLER_0 || priv->type == VIVE_CONTROLLER_1) {
+		priv->imu_config.acc_bias.x = -0.06838;
+		priv->imu_config.acc_bias.y = 0.02471;
+		priv->imu_config.acc_bias.z = -0.3016;
+
+		priv->imu_config.acc_scale.x = 0.9989;
+		priv->imu_config.acc_scale.y = 0.999;
+		priv->imu_config.acc_scale.z = 0.9983;
+
+		priv->imu_config.gyro_bias.x = -0.01291;
+		priv->imu_config.gyro_bias.y = -0.005497;
+		priv->imu_config.gyro_bias.z = -0.005004;
+
+		priv->imu_config.gyro_scale.x = 1.0f;
+		priv->imu_config.gyro_scale.y = 1.0f;
+		priv->imu_config.gyro_scale.z = 1.0f;
+
+		priv->imu_config.gyro_range = 8.726646f;
+		priv->imu_config.acc_range = 39.226600f;
+	}
+
+	switch (priv->type)
+	{
+	case VIVE_HEADSET:
+		if (open_headset(priv, idx) < 0)
+			goto cleanup;
+		break;
+	case VIVE_CONTROLLER_0:
+		if (open_controller(priv, idx, 0) < 0)
+		  goto cleanup;
+		break;
+	case VIVE_CONTROLLER_1:
+		if (open_controller(priv, idx, 1) < 0)
+		  goto cleanup;
+		break;
+	}
+
+	// Set default device properties
+	ohmd_set_default_device_properties(&priv->base.properties);
+
 	// set up device callbacks
-	priv->base.update = update_device;
-	priv->base.close = close_device;
-	priv->base.getf = getf;
+	if (priv->type == VIVE_HEADSET)
+	{
+		priv->base.update = update_headset;
+		priv->base.close = close_headset;
+		priv->base.getf = getf_headset;
+	}
+	else
+	{
+		priv->base.update = update_controller;
+		priv->base.close = close_controller;
+		priv->base.getf = getf_controller;
+	}
 
 	ofusion_init(&priv->sensor_fusion);
 
@@ -686,8 +1023,39 @@ static void get_device_list(ohmd_driver* driver, ohmd_device_list* list)
 		desc->device_class = OHMD_DEVICE_CLASS_HMD;
 		desc->device_flags = OHMD_DEVICE_FLAGS_ROTATIONAL_TRACKING;
 
+		desc->id = VIVE_HEADSET;
+
+		// Controller 0
+		desc = &list->devices[list->num_devices++];
+
+		strcpy(desc->driver, "OpenHMD HTC Vive Driver");
+		strcpy(desc->vendor, "HTC/Valve");
+		strcpy(desc->product, "HTC Vive: Controller 0");
+
+		snprintf(desc->path, OHMD_STR_SIZE, "%d", idx);
+
+		desc->device_flags = OHMD_DEVICE_FLAGS_ROTATIONAL_TRACKING;
+		desc->device_class = OHMD_DEVICE_CLASS_CONTROLLER;
+
+		desc->driver_ptr = driver;
+		desc->id = VIVE_CONTROLLER_0;
+
+		// Controller 1
+		desc = &list->devices[list->num_devices++];
+
+		strcpy(desc->driver, "OpenHMD HTC Vive Driver");
+		strcpy(desc->vendor, "HTC/Valve");
+		strcpy(desc->product, "HTC Vive: Controller 1");
+
+		snprintf(desc->path, OHMD_STR_SIZE, "%d", idx);
+
+		desc->device_flags = OHMD_DEVICE_FLAGS_ROTATIONAL_TRACKING;
+		desc->device_class = OHMD_DEVICE_CLASS_CONTROLLER;
+
+		desc->driver_ptr = driver;
+		desc->id = VIVE_CONTROLLER_1;
+
 		cur_dev = cur_dev->next;
-		idx++;
 	}
 
 	hid_free_enumeration(devs);

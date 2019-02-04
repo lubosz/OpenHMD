@@ -24,8 +24,22 @@ typedef enum
 	VIVE_CONFIG_START_PACKET_ID = 16,
 	VIVE_CONFIG_READ_PACKET_ID = 17,
 	VIVE_HMD_IMU_PACKET_ID = 32,
-	VIVE_FIRMWARE_VERSION_PACKET_ID = 0x05
+	VIVE_FIRMWARE_VERSION_PACKET_ID = 0x05,
+  VIVE_CONTROLLER_PACKET1_ID = 0x23,
+  VIVE_CONTROLLER_PACKET2_ID = 0x24,
+  VIVE_CONTROLLER_DISCONNECT_PACKET_ID = 0x26,
+  VIVE_CONTROLLER_COMMAND_PACKET_ID = 0xff
 } vive_irq_cmd;
+
+#define VIVE_CONTROLLER_BATTERY_CHARGING		0x80
+#define VIVE_CONTROLLER_BATTERY_CHARGE_MASK		0x7f
+
+#define VIVE_CONTROLLER_BUTTON_TRIGGER			0x01
+#define VIVE_CONTROLLER_BUTTON_TOUCH			0x02
+#define VIVE_CONTROLLER_BUTTON_THUMB			0x04
+#define VIVE_CONTROLLER_BUTTON_SYSTEM			0x08
+#define VIVE_CONTROLLER_BUTTON_GRIP			0x10
+#define VIVE_CONTROLLER_BUTTON_MENU			0x20
 
 typedef struct
 {
@@ -87,6 +101,46 @@ typedef struct
 	uint8_t reserved[13];
 } __attribute__((packed)) vive_firmware_version_packet;
 
+typedef struct
+{
+	uint8_t timestamp_hi;
+	uint8_t len;
+	uint8_t timestamp_lo;
+	uint8_t payload[26];
+} __attribute__((packed)) vive_controller_message;
+
+typedef struct
+{
+	uint8_t id;
+	vive_controller_message message;
+} __attribute__((packed)) vive_controller_packet1;
+
+typedef struct
+{
+	uint8_t id;
+	vive_controller_message message[2];
+} __attribute__((packed)) vive_controller_packet2;
+
+
+#define VIVE_CONTROLLER_HAPTIC_PULSE_COMMAND		0x8f
+
+typedef struct {
+	uint8_t id;
+	uint8_t command;
+	uint8_t len;
+	uint8_t unknown[7];
+} __attribute__((packed)) vive_controller_haptic_pulse_report;
+
+#define VIVE_CONTROLLER_POWEROFF_COMMAND		0x9f
+
+typedef struct {
+	uint8_t id;
+	uint8_t command;
+	uint8_t len;
+	uint8_t magic[4];
+} __attribute__((packed)) vive_controller_poweroff_report;
+
+
 void vec3f_from_vive_vec(const int16_t* smp, vec3f* out_vec);
 bool vive_decode_sensor_packet(vive_headset_imu_packet* pkt,
                                const unsigned char* buffer,
@@ -94,5 +148,4 @@ bool vive_decode_sensor_packet(vive_headset_imu_packet* pkt,
 bool vive_decode_config_packet(vive_imu_config* result,
                                const unsigned char* buffer,
                                uint16_t size);
-
 #endif

@@ -108,8 +108,7 @@ bool vive_decode_config_packet(vive_imu_config* result,
 	unsigned char output[32768];
 	mz_ulong output_size = 32768;
 
-	int cmp_status = uncompress(output, &output_size,
-	                            buffer, (mz_ulong)size);
+	int cmp_status = uncompress(output, &output_size, buffer, (mz_ulong)size);
 	if (cmp_status != Z_OK){
 		LOGE("invalid vive config, could not uncompress");
 		return false;
