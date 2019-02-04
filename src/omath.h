@@ -12,6 +12,7 @@
 #define OMATH_H
 
 #include <math.h>
+#include <stdint.h>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -26,6 +27,13 @@
 
 typedef union { 
 	struct { 
+		int16_t x, y;
+	};
+	int16_t arr[2];
+} vec2i;
+
+typedef union {
+	struct {
 		float x, y, z; 
 	}; 
 	float arr[3]; 
