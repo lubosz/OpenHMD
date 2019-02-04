@@ -12,7 +12,7 @@
 #include <assert.h>
 #include <math.h>
 #include "gl.h"
-
+#include "../src/omath.h"
 
 #define OVERSAMPLE_SCALE 2.0
 
@@ -75,11 +75,8 @@ void draw_crosshairs(float len, float cx, float cy)
 	glPopMatrix();
 }
 
-void draw_scene(GLuint list)
-{
-	// draw cubes
-	glCallList(list);
-}
+ohmd_device* controllers[2];
+
 static inline void
 print_matrix(float m[])
 {
@@ -91,6 +88,77 @@ print_matrix(float m[])
             m[1], m[5], m[9], m[13],
             m[2], m[6], m[10], m[14],
             m[3], m[7], m[11], m[15]);
+}
+
+void draw_coord_axes()
+{
+	glBegin(GL_LINES);
+	glColor3f(1, 0, 0);
+	glVertex3f(0.0, 0.0, 0.0);
+	glVertex3f(1.0, 0.0, 0.0);
+	glEnd();
+
+	glBegin(GL_LINES);
+	glColor3f(0, 1, 0);
+	glVertex3f(0.0, 0.0, 0.0);
+	glVertex3f(0.0, 1.0, 0.0);
+	glEnd();
+
+	glBegin(GL_LINES);
+	glColor3f(0, 0, 1);
+	glVertex3f(0.0, 0.0, 0.0);
+	glVertex3f(0.0, 0.0, 1.0);
+	glEnd();
+}
+
+void draw_controllers()
+{
+	float mat[4][4];
+
+	for (uint32_t i = 0; i < 2; i++)
+	{
+		glPushMatrix();
+
+		switch (i)
+		{
+		case 0:
+			glTranslatef(-1, 1, -1);
+			break;
+		case 1:
+			glTranslatef(1, 1, -1);
+			break;
+		}
+
+		glPushMatrix();
+		glMatrixMode(GL_MODELVIEW);
+
+		quatf orientation;
+		ohmd_device_getf(controllers[i], OHMD_ROTATION_QUAT, orientation.arr);
+		vec3f zero = { .x = 0, .y = 0, .z = 0 };
+		oquatf_get_mat4x4(&orientation, &zero, mat);
+		glMultMatrixf((float*)mat);
+
+		draw_coord_axes();
+
+		// Draw controller ray
+		glPushMatrix();
+		glColor3f(1, 1, 1);
+		glBegin(GL_LINES);
+		glVertex3f(0.0, 0.0, 0.0);
+		glVertex3f(0.0, 10.0, 0.0);
+		glEnd();
+		glPopMatrix();
+
+		glPopMatrix();
+		glPopMatrix();
+	}
+}
+
+void draw_scene(GLuint list)
+{
+	// draw cubes
+	glCallList(list);
+	draw_controllers();
 }
 
 int main(int argc, char** argv)
@@ -146,8 +214,22 @@ int main(int argc, char** argv)
 
 	ohmd_device_settings_destroy(settings);
 
+	controllers[0] = ohmd_list_open_device_s(ctx, 1, settings);
+	if(!controllers[0]){
+		printf("failed to open device: %s\n", ohmd_ctx_get_error(ctx));
+		return 1;
+	}
+
+	controllers[1] = ohmd_list_open_device_s(ctx, 2, settings);
+	if(!controllers[1]){
+		printf("failed to open device: %s\n", ohmd_ctx_get_error(ctx));
+		return 1;
+	}
+
 	gl_ctx gl;
 	init_gl(&gl, hmd_w, hmd_h);
+
+	glLineWidth(2.5);
 
 	SDL_ShowCursor(SDL_DISABLE);
 
