@@ -124,6 +124,27 @@ if get_option('default_library') == 'shared'
 		glewdep = dependency('glew')
 		executable('openhmd_opengl_example', opengl_sources , include_directories : include_directories(['./include', 'examples/opengl']), link_with: [openhmd_lib], dependencies : [sdldep, gldep, glewdep], install : true)
 	endif
+
+	### imu visualizer
+	# math_3d.h requires math dep for sqrtf()
+	cc = meson.get_compiler('c')
+	m_dep = cc.find_library('m', required : true)
+	sdl_dep = dependency('sdl2')
+	gl_dep = dependency('gl')
+	glew_dep = dependency('glew')
+
+	imu_viewer_sources = [
+		'examples/imu_viewer/imu_viewer.c',
+	]
+
+	if sdl_dep.found() and gl_dep.found() and glew_dep.found()
+		executable('imu_viewer',
+		           imu_viewer_sources ,
+		           include_directories : include_directories(['./include', 'examples/ext_deps']),
+		           link_with: [openhmd_lib],
+		           dependencies : [sdl_dep, gl_dep, glew_dep, m_dep], install : true)
+	endif
+
 endif
 
 pkg = import('pkgconfig')
