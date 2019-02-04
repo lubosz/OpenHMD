@@ -160,14 +160,13 @@ int main(int argc, char** argv)
 			float control_state[256];
 			ohmd_device_getf(hmd, OHMD_CONTROLS_STATE, control_state);
 
-			printf("%-25s", "controls state:");
+			printf("%-16s", "controls state:");
 			for(int i = 0; i < control_count; i++)
 			{
 				printf("%f ", control_state[i]);
 			}
+			printf("\n");
 		}
-		puts("");
-			
 		ohmd_sleep(.01);
 	}
 
