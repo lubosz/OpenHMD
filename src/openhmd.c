@@ -643,3 +643,41 @@ ohmd_status ohmd_require_version(int major, int minor, int patch)
 
 	return OHMD_S_OK;
 }
+
+#define ENUM_TO_STR(r) case r: return #r
+
+const char* ohmd_control_hint_to_str(ohmd_control_hint hint)
+{
+	switch(hint)
+	{
+		ENUM_TO_STR(OHMD_GENERIC);
+		ENUM_TO_STR(OHMD_TRIGGER);
+		ENUM_TO_STR(OHMD_TRIGGER_CLICK);
+		ENUM_TO_STR(OHMD_SQUEEZE);
+		ENUM_TO_STR(OHMD_MENU);
+		ENUM_TO_STR(OHMD_HOME);
+		ENUM_TO_STR(OHMD_ANALOG_X);
+		ENUM_TO_STR(OHMD_ANALOG_Y);
+		ENUM_TO_STR(OHMD_ANALOG_PRESS);
+		ENUM_TO_STR(OHMD_BUTTON_A);
+		ENUM_TO_STR(OHMD_BUTTON_B);
+		ENUM_TO_STR(OHMD_BUTTON_X);
+		ENUM_TO_STR(OHMD_VOLUME_PLUS);
+		ENUM_TO_STR(OHMD_VOLUME_MINUS);
+		ENUM_TO_STR(OHMD_MIC_MUTE);
+		ENUM_TO_STR(OHMD_TOUCHPAD_TOUCH);
+		default:
+			return "UNKNOWN Hint";
+	}
+}
+
+const char* ohmd_control_type_to_str(ohmd_control_type type)
+{
+	switch(type)
+	{
+		ENUM_TO_STR(OHMD_DIGITAL);
+		ENUM_TO_STR(OHMD_ANALOG);
+		default:
+			return "UNKNOWN Type";
+	}
+}
