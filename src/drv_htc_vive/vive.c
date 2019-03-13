@@ -375,6 +375,7 @@ int vive_read_config(vive_priv* priv)
 
 	int bytes;
 
+get_config:
 	LOGI("Getting vive_config_start_packet...");
 	bytes = hid_get_feature_report(priv->imu_handle,
 	                               (unsigned char*) &start_packet,
@@ -384,6 +385,7 @@ int vive_read_config(vive_priv* priv)
 	{
 		LOGE("Could not get vive_config_start_packet: %ls (%d)",
 		     hid_error(priv->imu_handle), bytes);
+		goto get_config;
 		return bytes;
 	}
 
