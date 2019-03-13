@@ -143,8 +143,8 @@ int main(int argc, char** argv)
 		//ohmd_device_setf(hmd, OHMD_POSITION_VECTOR, zero);
 
 		// get rotation and postition
-		print_infof(hmd, "rotation quat:", 4, OHMD_ROTATION_QUAT);
-		print_infof(hmd, "position vec: ", 3, OHMD_POSITION_VECTOR);
+		//print_infof(hmd, "rotation quat:", 4, OHMD_ROTATION_QUAT);
+		//print_infof(hmd, "position vec: ", 3, OHMD_POSITION_VECTOR);
 
 		// read controls
 		if (device_class & OHMD_DEVICE_CLASS_CONTROLLER) {
@@ -157,7 +157,7 @@ int main(int argc, char** argv)
 				printf("%f ", control_state[i]);
 			}
 		}
-		puts("");
+		//puts("");
 			
 		ohmd_sleep(.01);
 	}
