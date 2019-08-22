@@ -14,6 +14,7 @@
 #define HTC_ID                   0x0bb4
 #define VIVE_HMD                 0x2c87
 #define VIVE_PRO_HMD             0x0309
+#define INDEX_HMD		 0x2300
 
 #define VALVE_ID                 0x28de
 #define VIVE_WATCHMAN_DONGLE     0x2101
@@ -34,7 +35,8 @@
 
 typedef enum {
 	REV_VIVE,
-	REV_VIVE_PRO
+	REV_VIVE_PRO,
+	REV_INDEX
 } vive_revision;
 
 typedef struct {
@@ -165,6 +167,12 @@ static void update_device(ohmd_device* device)
 						priv->raw_gyro.x *= -1;
 						priv->raw_gyro.z *= -1;
 						break;
+					case REV_INDEX:
+						priv->raw_accel.x *= -1;
+						priv->raw_accel.z *= -1;
+						priv->raw_gyro.x *= -1;
+						priv->raw_gyro.z *= -1;
+						break;
 					default:
 						LOGE("Unknown VIVE revision.\n");
 				}
@@ -242,12 +250,20 @@ static void close_device(ohmd_device* device)
 			                               sizeof(vive_pro_magic_power_off));
 			LOGI("vive pro power off magic: %d\n", hret);
 			break;
+		case REV_INDEX:
+			hret = hid_send_feature_report(priv->hmd_handle,
+			                               index_magic_power_off,
+			                               sizeof(index_magic_power_off));
+			LOGI("Index power off magic: %d\n", hret);
+			break;
 		default:
 			LOGE("Unknown VIVE revision.\n");
 	}
 
 	hid_close(priv->hmd_handle);
-	hid_close(priv->imu_handle);
+	if(priv->revision != REV_INDEX){
+		hid_close(priv->imu_handle);
+	}
 
 	free(device);
 }
@@ -433,6 +449,9 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 		case REV_VIVE_PRO:
 			priv->hmd_handle = open_device_idx(HTC_ID, VIVE_PRO_HMD, 0, 1, idx);
 			break;
+		case REV_INDEX:
+			priv->hmd_handle = open_device_idx(VALVE_ID, INDEX_HMD, 0, 1, idx);
+			break;
 		default:
 			LOGE("Unknown VIVE revision.\n");
 	}
@@ -453,6 +472,12 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 		case REV_VIVE_PRO:
 			priv->imu_handle = open_device_idx(VALVE_ID, VIVE_LHR, 0, 1, idx);
 			break;
+			
+		case REV_INDEX:
+			//priv->imu_handle = open_device_idx(VALVE_ID, VIVE_LHR, 0, 1, idx);
+			priv->imu_handle = priv->hmd_handle;
+			break;
+			
 		default:
 			LOGE("Unknown VIVE revision.\n");
 	}
@@ -486,6 +511,19 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 
 			// Enable VIVE Pro IMU
 			hret = hid_send_feature_report(priv->imu_handle,
+			                               vive_pro_enable_imu,
+			                               sizeof(vive_pro_enable_imu));
+			LOGI("Enable Pro IMU magic: %d\n", hret);
+			break;
+		case REV_INDEX:
+			// turn the display on
+			hret = hid_send_feature_report(priv->hmd_handle,
+			                               index_magic_power_on,
+			                               sizeof(index_magic_power_on));
+			LOGI("power on magic: %d\n", hret);
+
+			// Enable Index IMU
+			hret = hid_send_feature_report(priv->hmd_handle,
 			                               vive_pro_enable_imu,
 			                               sizeof(vive_pro_enable_imu));
 			LOGI("Enable Pro IMU magic: %d\n", hret);
@@ -540,6 +578,11 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 			priv->base.properties.vres = 1600;
 			priv->base.properties.ratio = (2880.0f / 1600.0f) / 2.0f;
 			break;
+		case REV_INDEX:
+			priv->base.properties.hres = 2880;
+			priv->base.properties.vres = 1600;
+			priv->base.properties.ratio = (2880.0f / 1600.0f) / 2.0f;
+			break;
 		default:
 			LOGE("Unknown VIVE revision.\n");
 	}
@@ -590,8 +633,15 @@ static void get_device_list(ohmd_driver* driver, ohmd_device_list* list)
 		rev = REV_VIVE;
 	} else {
 		devs = hid_enumerate(HTC_ID, VIVE_PRO_HMD);
-		if (devs != NULL)
+		if (devs != NULL){
 			rev = REV_VIVE_PRO;
+		}
+		else{
+			devs = hid_enumerate(VALVE_ID, INDEX_HMD);
+			if (devs != NULL){
+				rev = REV_INDEX;
+			}
+		}
 	}
 
 	struct hid_device_info* cur_dev = devs;
