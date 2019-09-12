@@ -14,7 +14,7 @@
 #define HTC_ID                   0x0bb4
 #define VIVE_HMD                 0x2c87
 #define VIVE_PRO_HMD             0x0309
-#define INDEX_HMD		 0x2300
+#define INDEX_HMD                0x2300
 
 #define VALVE_ID                 0x28de
 #define VIVE_WATCHMAN_DONGLE     0x2101
@@ -472,12 +472,10 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 		case REV_VIVE_PRO:
 			priv->imu_handle = open_device_idx(VALVE_ID, VIVE_LHR, 0, 1, idx);
 			break;
-			
 		case REV_INDEX:
 			//priv->imu_handle = open_device_idx(VALVE_ID, VIVE_LHR, 0, 1, idx);
 			priv->imu_handle = priv->hmd_handle;
 			break;
-			
 		default:
 			LOGE("Unknown VIVE revision.\n");
 	}
@@ -633,12 +631,11 @@ static void get_device_list(ohmd_driver* driver, ohmd_device_list* list)
 		rev = REV_VIVE;
 	} else {
 		devs = hid_enumerate(HTC_ID, VIVE_PRO_HMD);
-		if (devs != NULL){
+		if (devs != NULL) {
 			rev = REV_VIVE_PRO;
-		}
-		else{
+		} else{
 			devs = hid_enumerate(VALVE_ID, INDEX_HMD);
-			if (devs != NULL){
+			if (devs != NULL) {
 				rev = REV_INDEX;
 			}
 		}
