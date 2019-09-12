@@ -162,11 +162,6 @@ static void update_device(ohmd_device* device)
 						priv->raw_gyro.z *= -1;
 						break;
 					case REV_VIVE_PRO:
-						priv->raw_accel.x *= -1;
-						priv->raw_accel.z *= -1;
-						priv->raw_gyro.x *= -1;
-						priv->raw_gyro.z *= -1;
-						break;
 					case REV_INDEX:
 						priv->raw_accel.x *= -1;
 						priv->raw_accel.z *= -1;
@@ -572,10 +567,6 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 			priv->base.properties.ratio = (2160.0f / 1200.0f) / 2.0f;
 			break;
 		case REV_VIVE_PRO:
-			priv->base.properties.hres = 2880;
-			priv->base.properties.vres = 1600;
-			priv->base.properties.ratio = (2880.0f / 1600.0f) / 2.0f;
-			break;
 		case REV_INDEX:
 			priv->base.properties.hres = 2880;
 			priv->base.properties.vres = 1600;
