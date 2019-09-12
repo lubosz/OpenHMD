@@ -60,22 +60,24 @@ typedef struct {
 
 void vec3f_from_vive_vec_accel(const vive_imu_config* config,
                                const int16_t* smp,
-                               vec3f* out)
+                               vec3f* out,
+                               uint32_t a, uint32_t b, uint32_t c)
 {
 	float range = config->acc_range / 32768.0f;
-	out->x = range * config->acc_scale.x * (float) smp[0] - config->acc_bias.x;
-	out->y = range * config->acc_scale.y * (float) smp[1] - config->acc_bias.y;
-	out->z = range * config->acc_scale.z * (float) smp[2] - config->acc_bias.z;
+	out->x = range * config->acc_scale.x * (float) smp[a] - config->acc_bias.x;
+	out->y = range * config->acc_scale.y * (float) smp[b] - config->acc_bias.y;
+	out->z = range * config->acc_scale.z * (float) smp[c] - config->acc_bias.z;
 }
 
 void vec3f_from_vive_vec_gyro(const vive_imu_config* config,
                               const int16_t* smp,
-                              vec3f* out)
+                              vec3f* out,
+                              uint32_t a, uint32_t b, uint32_t c)
 {
 	float range = config->gyro_range / 32768.0f;
-	out->x = range * config->gyro_scale.x * (float)smp[0] - config->gyro_bias.x;
-	out->y = range * config->gyro_scale.y * (float)smp[1] - config->gyro_bias.x;
-	out->z = range * config->gyro_scale.z * (float)smp[2] - config->gyro_bias.x;
+	out->x = range * config->gyro_scale.x * (float)smp[a] - config->gyro_bias.x;
+	out->y = range * config->gyro_scale.y * (float)smp[b] - config->gyro_bias.x;
+	out->z = range * config->gyro_scale.z * (float)smp[c] - config->gyro_bias.x;
 }
 
 static bool process_error(vive_priv* priv)
@@ -150,8 +152,22 @@ static void update_device(ohmd_device* device)
 
 				priv->last_ticks = smp->time_ticks;
 
-				vec3f_from_vive_vec_accel(&priv->imu_config, smp->acc, &priv->raw_accel);
-				vec3f_from_vive_vec_gyro(&priv->imu_config, smp->rot, &priv->raw_gyro);
+				switch (priv->revision) {
+					case REV_VIVE:
+					case REV_VIVE_PRO:
+						vec3f_from_vive_vec_accel(&priv->imu_config, smp->acc,
+                                      &priv->raw_accel, 0, 1, 2);
+						vec3f_from_vive_vec_gyro(&priv->imu_config, smp->rot,
+                                     &priv->raw_gyro, 0, 1, 2);
+					case REV_INDEX:
+						vec3f_from_vive_vec_accel(&priv->imu_config, smp->acc,
+                                      &priv->raw_accel, 1, 0, 2);
+						vec3f_from_vive_vec_gyro(&priv->imu_config, smp->rot,
+                                     &priv->raw_gyro, 1, 0, 2);
+						break;
+					default:
+						LOGE("Unknown VIVE revision.\n");
+				}
 
 				// Fix imu orientation
 				switch (priv->revision) {
