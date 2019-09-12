@@ -246,9 +246,9 @@ static void close_device(ohmd_device* device)
 			LOGI("vive pro power off magic: %d\n", hret);
 			break;
 		case REV_INDEX:
-			hret = hid_send_feature_report(priv->hmd_handle,
-			                               index_magic_power_off,
-			                               sizeof(index_magic_power_off));
+			//hret = hid_send_feature_report(priv->hmd_handle,
+			//                               index_magic_power_off,
+			//                               sizeof(index_magic_power_off));
 			LOGI("Index power off magic: %d\n", hret);
 			break;
 		default:
@@ -510,11 +510,12 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 			break;
 		case REV_INDEX:
 			// turn the display on
+			/*
 			hret = hid_send_feature_report(priv->hmd_handle,
 			                               index_magic_power_on,
 			                               sizeof(index_magic_power_on));
 			LOGI("power on magic: %d\n", hret);
-
+			*/
 			// Enable Index IMU
 			hret = hid_send_feature_report(priv->hmd_handle,
 			                               vive_pro_enable_imu,
