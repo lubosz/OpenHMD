@@ -178,12 +178,18 @@ static void update_device(ohmd_device* device)
 						priv->raw_gyro.z *= -1;
 						break;
 					case REV_VIVE_PRO:
-					case REV_INDEX:
 						priv->raw_accel.x *= -1;
 						priv->raw_accel.z *= -1;
 						priv->raw_gyro.x *= -1;
 						priv->raw_gyro.z *= -1;
-						break;
+					case REV_INDEX:
+          /*
+						priv->raw_accel.x *= -1;
+						priv->raw_accel.z *= -1;
+						priv->raw_gyro.x *= -1;
+						priv->raw_gyro.z *= -1;
+					*/
+           break;
 					default:
 						LOGE("Unknown VIVE revision.\n");
 				}
@@ -532,10 +538,10 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 			                               sizeof(index_magic_power_on));
 			LOGI("power on magic: %d\n", hret);
 			*/
-			// Enable Index IMU
-			hret = hid_send_feature_report(priv->hmd_handle,
-			                               vive_pro_enable_imu,
-			                               sizeof(vive_pro_enable_imu));
+			// Enable Index IMU, not required on index?
+			//hret = hid_send_feature_report(priv->hmd_handle,
+			//                               vive_pro_enable_imu,
+			//                               sizeof(vive_pro_enable_imu));
 			LOGI("Enable Pro IMU magic: %d\n", hret);
 			break;
 		default:
